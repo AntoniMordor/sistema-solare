@@ -1,0 +1,16 @@
+{
+  "name": "sistema-solare",
+  "version": "1.0.0",
+  "description": "Simulazione interattiva 3D del Sistema Solare — Creato da Antonio Izzo",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.160.0"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  }
+}

@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sistema Solare 3D</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/css/style.css" />
+  </head>
+  <body>
+    <!-- Loading -->
+    <div id="loading">
+      <div id="loading-title">SISTEMA SOLARE</div>
+      <div id="loading-sub">INIZIALIZZAZIONE IN CORSO</div>
+      <div id="loading-bar"><div id="loading-fill"></div></div>
+    </div>
+
+    <!-- Title (hidden during follow mode) -->
+    <div id="ui-title">SISTEMA SOLARE 3D</div>
+
+    <!-- Exit follow mode button -->
+    <button id="exit-follow">← TORNA ALLA MAPPA</button>
+
+    <!-- Controls hint -->
+    <div id="controls-hint">
+      🖱 Rotazione — trascina<br />
+      🔍 Zoom — scroll<br />
+      ✋ Pan — tasto destro<br />
+      🪐 Click — segui pianeta
+    </div>
+
+    <!-- Speed control -->
+    <div id="speed-box">
+      <label for="speed-slider">VELOCITÀ</label>
+      <input type="range" id="speed-slider" min="0" max="6" step="0.1" value="1" />
+      <span id="speed-val">1.0×</span>
+    </div>
+
+    <!-- Orbit toggle -->
+    <button id="orbit-btn" class="on">◯ ORBITE</button>
+
+    <!-- Planet info panel -->
+    <div id="info-panel">
+      <button id="panel-x">×</button>
+      <canvas id="p-icon" width="64" height="64"></canvas>
+      <div id="p-name">—</div>
+      <div id="p-tag">SISTEMA SOLARE</div>
+      <div class="divider"></div>
+      <div class="row">
+        <span class="lbl">Distanza dal Sole</span>
+        <span class="val" id="i-dist">—</span>
+      </div>
+      <div class="row">
+        <span class="lbl">Periodo Orbitale</span>
+        <span class="val" id="i-period">—</span>
+      </div>
+      <div class="row">
+        <span class="lbl">Diametro</span>
+        <span class="val" id="i-diam">—</span>
+      </div>
+      <div class="row">
+        <span class="lbl">Lune</span>
+        <span class="val" id="i-moons">—</span>
+      </div>
+      <div class="divider"></div>
+      <div id="p-desc"></div>
+    </div>
+
+    <!-- Tooltip -->
+    <div id="tooltip"></div>
+
+    <!-- Credits -->
+    <div id="credits">Creato da <strong>Antonio Izzo</strong></div>
+
+    <script type="module" src="/js/main.js"></script>
+  </body>
+</html>

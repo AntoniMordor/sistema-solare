@@ -2,17 +2,14 @@ import * as THREE from 'three';
 import { scene, camera, renderer, controls } from './scene.js';
 import { createStarfield } from './starfield.js';
 import { createSun, updateSun } from './sun.js';
-import { createPlanets, planetMeshes } from './planets.js';
+import { createPlanets, planetMeshes, moonMeshes, moonOrbitLines } from './planets.js';
 import { updateCamera, isFollowing } from './cameraControl.js';
 import { setupUI, getSpeed } from './ui.js';
 import { PLANETS } from './data.js';
 
 // ── Illuminazione ─────────────────────────────────────────────────────────────
-// Luce ambientale forte: garantisce che tutti i pianeti (anche Urano e Nettuno)
-// siano chiaramente visibili indipendentemente dalla distanza dal Sole.
+// AmbientLight forte: tutti i pianeti e le lune restano visibili a qualsiasi distanza.
 scene.add(new THREE.AmbientLight(0x5577aa, 3.5));
-
-// Luce emisferica per dare un tono "spaziale" (cielo blu scuro, suolo nero)
 scene.add(new THREE.HemisphereLight(0x223366, 0x000011, 1.2));
 
 // ── Costruzione scena ─────────────────────────────────────────────────────────
@@ -39,24 +36,37 @@ function animate() {
   const spd = getSpeed();
   t += dt * spd;
 
-  // Animazione Sole
   updateSun(t, dt);
 
   // Animazione pianeti
   planetMeshes.forEach((mesh, i) => {
     const p = PLANETS[i];
-    // Avanzamento angolo orbitale
     mesh.userData.angle += dt * p.spd * 0.1 * spd;
     const a = mesh.userData.angle;
     mesh.position.set(Math.cos(a) * p.dist, 0, Math.sin(a) * p.dist);
-    // Rotazione assiale
     mesh.rotation.y += dt * (0.4 + i * 0.07);
   });
 
-  // Camera follow (se un pianeta è selezionato)
-  updateCamera(dt);
+  // Animazione lune: orbitano attorno al pianeta padre
+  moonMeshes.forEach((moonMesh) => {
+    const { moon, parentMesh } = moonMesh.userData;
+    // moon.spd negativo → orbita retrograda (es. Tritone)
+    moonMesh.userData.angle += dt * moon.spd * 0.3 * spd;
+    const a = moonMesh.userData.angle;
+    moonMesh.position.set(
+      parentMesh.position.x + Math.cos(a) * moon.orbitR,
+      parentMesh.position.y,
+      parentMesh.position.z + Math.sin(a) * moon.orbitR
+    );
+    moonMesh.rotation.y += dt * 0.6;
+  });
 
-  // OrbitControls solo in modalità libera
+  // Riposiziona le linee orbitali delle lune sul pianeta padre
+  moonOrbitLines.forEach((line) => {
+    line.position.copy(line.userData.parentMesh.position);
+  });
+
+  updateCamera(dt);
   if (!isFollowing()) controls.update();
 
   renderer.render(scene, camera);

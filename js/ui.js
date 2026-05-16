@@ -12,74 +12,90 @@ export function getSpeed() { return speedMultiplier; }
 
 // ── Pannello informativo ──────────────────────────────────────────────────────
 
+function _set(id, val) { document.getElementById(id).textContent = val; }
+
 function _computeSeason(textureKey, orbAngle) {
   try {
     const jd = getEffectiveJD();
     const { lon } = getHeliocentricPosition(textureKey, jd);
-    // In simulazione l'angolo orbitale potrebbe divergere dal kepleriano;
-    // usiamo il kepleriano in real-time, l'angolo mesh in simulazione.
-    const effectiveLon = Number.isFinite(lon) ? lon : orbAngle;
-    return getSeasons(effectiveLon);
+    return getSeasons(Number.isFinite(lon) ? lon : orbAngle);
   } catch {
     return null;
   }
 }
 
-function showInfo(mesh) {
-  const isMoon  = mesh.userData.type === 'moon';
-  const elSeason     = document.getElementById('i-season');
-  const elSeasonRow  = document.getElementById('season-row');
+function _fillMoon(moon) {
+  _set('p-name',   moon.name);
+  _set('p-tag',    `LUNA DI ${moon.info.parentPlanet.toUpperCase()}`);
+  _set('lbl-dist', 'Dist. dal Pianeta');
+  _set('lbl-extra','Pianeta');
+  _set('i-dist',   moon.info.dist);
+  _set('i-period', moon.info.period);
+  _set('i-diam',   moon.info.diam);
+  _set('i-moons',  moon.info.parentPlanet);
+  _set('p-desc',   moon.info.desc);
+  const sr = document.getElementById('season-row');
+  if (sr) sr.style.display = 'none';
+}
 
-  if (isMoon) {
-    const m = mesh.userData.moon;
-    document.getElementById('p-name').textContent    = m.name;
-    document.getElementById('p-tag').textContent     = `LUNA DI ${m.info.parentPlanet.toUpperCase()}`;
-    document.getElementById('lbl-dist').textContent  = 'Dist. dal Pianeta';
-    document.getElementById('lbl-extra').textContent = 'Pianeta';
-    document.getElementById('i-dist').textContent    = m.info.dist;
-    document.getElementById('i-period').textContent  = m.info.period;
-    document.getElementById('i-diam').textContent    = m.info.diam;
-    document.getElementById('i-moons').textContent   = m.info.parentPlanet;
-    document.getElementById('p-desc').textContent    = m.info.desc;
-    if (elSeasonRow) elSeasonRow.style.display = 'none';
+function _fillPlanet(planet, textureKey, angle) {
+  _set('p-name',   planet.name);
+  _set('p-tag',    planet.tag);
+  _set('lbl-dist', 'Distanza dal Sole');
+  _set('lbl-extra','Lune');
+  _set('i-dist',   planet.info.dist);
+  _set('i-period', planet.info.period);
+  _set('i-diam',   planet.info.diam);
+  _set('i-moons',  planet.info.moons);
+  _set('p-desc',   planet.info.desc);
+  _updateSeason(textureKey, angle);
+}
+
+function _updateSeason(textureKey, angle) {
+  const elRow    = document.getElementById('season-row');
+  const elSeason = document.getElementById('i-season');
+  if (!elRow || !elSeason) return;
+  const season = _computeSeason(textureKey, angle ?? 0);
+  if (season) {
+    elSeason.textContent  = `${season.north} (N) · ${season.south} (S)`;
+    elRow.style.display   = '';
   } else {
-    const p = mesh.userData.planet;
-    document.getElementById('p-name').textContent    = p.name;
-    document.getElementById('p-tag').textContent     = p.tag;
-    document.getElementById('lbl-dist').textContent  = 'Distanza dal Sole';
-    document.getElementById('lbl-extra').textContent = 'Lune';
-    document.getElementById('i-dist').textContent    = p.info.dist;
-    document.getElementById('i-period').textContent  = p.info.period;
-    document.getElementById('i-diam').textContent    = p.info.diam;
-    document.getElementById('i-moons').textContent   = p.info.moons;
-    document.getElementById('p-desc').textContent    = p.info.desc;
-
-    // Stagioni correnti del pianeta
-    if (elSeasonRow && elSeason) {
-      const season = _computeSeason(p.textureKey, mesh.userData.angle ?? 0);
-      if (season) {
-        elSeason.textContent = `${season.north} (N) · ${season.south} (S)`;
-        elSeasonRow.style.display = '';
-      } else {
-        elSeasonRow.style.display = 'none';
-      }
-    }
+    elRow.style.display = 'none';
   }
+}
 
-  // Miniatura del corpo celeste
+function _drawIcon(mesh, isMoon) {
   const icon = document.getElementById('p-icon');
   const ctx  = icon.getContext('2d');
   ctx.clearRect(0, 0, 64, 64);
-  const img = mesh.material.map?.image;
+
+  // Terra usa ShaderMaterial → day texture nelle uniforms
+  const img = mesh.material.uniforms?.uDay
+    ? mesh.material.uniforms.uDay.value?.image
+    : mesh.material.map?.image;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(32, 32, 30, 0, Math.PI * 2);
   if (img) {
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(32, 32, 30, 0, Math.PI * 2);
     ctx.clip();
     ctx.drawImage(img, 0, 0, 64, 64);
-    ctx.restore();
+  } else {
+    const data   = isMoon ? mesh.userData.moon : mesh.userData.planet;
+    ctx.fillStyle = data.emi ? `#${data.emi.toString(16).padStart(6, '0')}` : '#334455';
+    ctx.fill();
   }
+  ctx.restore();
+}
 
+function showInfo(mesh) {
+  const isMoon = mesh.userData.type === 'moon';
+  if (isMoon) {
+    _fillMoon(mesh.userData.moon);
+  } else {
+    _fillPlanet(mesh.userData.planet, mesh.userData.planet.textureKey, mesh.userData.angle);
+  }
+  _drawIcon(mesh, isMoon);
   document.getElementById('info-panel').classList.add('open');
 }
 

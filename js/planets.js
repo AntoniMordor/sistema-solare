@@ -29,39 +29,44 @@ const EARTH_VERT = /* glsl */`
 const EARTH_FRAG = /* glsl */`
   uniform sampler2D uDay;
   uniform sampler2D uNight;
-  uniform vec3      uSunDir;   // dir. dal centro Terra verso il Sole (world space)
+  uniform vec3      uSunDir;
 
   varying vec3 vWorldNormal;
   varying vec2 vUv;
 
   void main() {
-    vec3  N      = normalize(vWorldNormal);
-    float cosA   = dot(N, normalize(uSunDir));
+    vec3  N    = normalize(vWorldNormal);
+    vec3  L    = normalize(uSunDir);
+    float cosA = dot(N, L);
 
-    // Zona terminatore ±10°  → smooth blend
-    float day    = smoothstep(-0.18, 0.18, cosA);
+    // Transizione terminatore: ±0.18 rad ≈ ±10°
+    float day = smoothstep(-0.18, 0.18, cosA);
 
     vec4 colDay   = texture2D(uDay,   vUv);
     vec4 colNight = texture2D(uNight, vUv);
 
-    // Blend giorno/notte
-    vec4 color = mix(colNight, colDay, day);
+    // ── Lato GIORNO: continenti illuminati dal Sole ──────────────────────────
+    // Illuminazione Phong: 25% ambientale + 100% diffusa → mai completamente nero
+    float sunDiff = max(0.0, cosA);
+    vec4 litDay   = colDay * (0.25 + sunDiff * 0.85);
 
-    // Diffuse sunlight sul lato giorno
-    float diff = max(0.0, cosA);
-    color.rgb *= mix(0.08, 1.0 + diff * 0.25, day);
+    // ── Lato NOTTE: luci città a PIENA luminosità — nessun moltiplicatore! ──
+    // Le luci artificiali emettono luce propria, non riflettono il Sole.
+    vec4 litNight = colNight * 1.5;   // boost leggero per visibilità
 
-    // Bagliore atmosferico azzurro al terminatore
-    float rim = 1.0 - abs(cosA);
-    rim = pow(rim, 4.0);
-    color.rgb += vec3(0.05, 0.12, 0.28) * rim;
+    // Blend giorno/notte al terminatore
+    vec4 color = mix(litNight, litDay, day);
 
-    // Highlight speculare sull'oceano (canale blu alto = oceano)
-    float ocean   = clamp(colDay.b - colDay.g * 0.6, 0.0, 1.0);
-    float spec    = pow(max(0.0, cosA), 40.0) * ocean * day;
-    color.rgb    += vec3(0.4, 0.55, 0.7) * spec;
+    // Bagliore atmosferico azzurro (riflesso atmosphere scatter)
+    float rimFactor = pow(clamp(1.0 - abs(cosA), 0.0, 1.0), 3.0);
+    color.rgb += vec3(0.02, 0.08, 0.25) * rimFactor * 0.7;
 
-    gl_FragColor = color;
+    // Highlight speculare sull'oceano (canale blu >> verde e rosso)
+    float ocean = clamp(colDay.b * 1.4 - colDay.g * 0.7 - colDay.r * 0.6, 0.0, 1.0);
+    float spec  = pow(max(0.0, cosA), 55.0) * ocean * day * 0.9;
+    color.rgb  += vec3(0.45, 0.65, 0.95) * spec;
+
+    gl_FragColor = vec4(color.rgb, 1.0);
   }
 `;
 

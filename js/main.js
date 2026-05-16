@@ -6,17 +6,24 @@ import { createPlanets, planetMeshes, moonMeshes, moonOrbitLines } from './plane
 import { updateCamera, isFollowing } from './cameraControl.js';
 import { setupUI, getSpeed } from './ui.js';
 import { PLANETS } from './data.js';
+import {
+  getHeliocentricPosition,
+  getPlanetRotationAngle,
+  getMoonAngle,
+} from './astronomy.js';
+import { isRealTimeMode, getCurrentJD } from './timeControl.js';
 
 // ── Illuminazione ─────────────────────────────────────────────────────────────
-// AmbientLight forte: tutti i pianeti e le lune restano visibili a qualsiasi distanza.
-scene.add(new THREE.AmbientLight(0x5577aa, 3.5));
-scene.add(new THREE.HemisphereLight(0x223366, 0x000011, 1.2));
+// Ambientale forte: tutti i pianeti rimangono visibili a qualsiasi distanza.
+// In modalità reale la PointLight del Sole crea le ombre day/night corrette.
+scene.add(new THREE.AmbientLight(0x4466aa, 2.8));
+scene.add(new THREE.HemisphereLight(0x223366, 0x000011, 1));
 
 // ── Costruzione scena ─────────────────────────────────────────────────────────
 createStarfield();
 createSun();
 createPlanets();
-setupUI();
+setupUI();         // include setupTimeControl()
 
 // ── Loading screen ────────────────────────────────────────────────────────────
 const loading = document.getElementById('loading');
@@ -34,32 +41,67 @@ function animate() {
 
   const dt  = Math.min(clock.getDelta(), 0.05);
   const spd = getSpeed();
-  t += dt * spd;
 
   updateSun(t, dt);
 
-  // Animazione pianeti
-  planetMeshes.forEach((mesh, i) => {
-    const p = PLANETS[i];
-    mesh.userData.angle += dt * p.spd * 0.1 * spd;
-    const a = mesh.userData.angle;
-    mesh.position.set(Math.cos(a) * p.dist, 0, Math.sin(a) * p.dist);
-    mesh.rotation.y += dt * (0.4 + i * 0.07);
-  });
+  // ── MODALITÀ TEMPO REALE ───────────────────────────────────────────────────
+  if (isRealTimeMode()) {
+    const jd = getCurrentJD();
 
-  // Animazione lune: orbitano attorno al pianeta padre
-  moonMeshes.forEach((moonMesh) => {
-    const { moon, parentMesh } = moonMesh.userData;
-    // moon.spd negativo → orbita retrograda (es. Tritone)
-    moonMesh.userData.angle += dt * moon.spd * 0.3 * spd;
-    const a = moonMesh.userData.angle;
-    moonMesh.position.set(
-      parentMesh.position.x + Math.cos(a) * moon.orbitR,
-      parentMesh.position.y,
-      parentMesh.position.z + Math.sin(a) * moon.orbitR
-    );
-    moonMesh.rotation.y += dt * 0.6;
-  });
+    planetMeshes.forEach((mesh, i) => {
+      const p = PLANETS[i];
+      const { lon, lat } = getHeliocentricPosition(p.textureKey, jd);
+
+      // Posizione: angolo reale + distanza compressa + inclinazione amplificata
+      mesh.position.set(
+        Math.cos(lon) * p.dist,
+        Math.sin(lat) * p.dist,      // inclinazione eclittica reale
+        Math.sin(lon) * p.dist
+      );
+      mesh.userData.angle = lon;
+
+      // Rotazione siderale reale → terminatore giorno/notte corretto
+      mesh.rotation.z = p.tilt;     // inclinazione assiale costante
+      mesh.rotation.y = getPlanetRotationAngle(p.textureKey, jd);
+    });
+
+    moonMeshes.forEach((moonMesh) => {
+      const { moon, parentMesh } = moonMesh.userData;
+      const a = getMoonAngle(moon.textureKey, jd);
+      moonMesh.userData.angle = a;
+      moonMesh.position.set(
+        parentMesh.position.x + Math.cos(a) * moon.orbitR,
+        parentMesh.position.y,
+        parentMesh.position.z + Math.sin(a) * moon.orbitR
+      );
+      moonMesh.rotation.y += dt * 0.6; // rotazione propria approssimata
+    });
+
+  // ── MODALITÀ SIMULAZIONE ───────────────────────────────────────────────────
+  } else {
+    t += dt * spd;
+
+    planetMeshes.forEach((mesh, i) => {
+      const p = PLANETS[i];
+      mesh.userData.angle += dt * p.spd * 0.1 * spd;
+      const a = mesh.userData.angle;
+      mesh.position.set(Math.cos(a) * p.dist, 0, Math.sin(a) * p.dist);
+      mesh.rotation.z = p.tilt;
+      mesh.rotation.y += dt * (0.4 + i * 0.07);
+    });
+
+    moonMeshes.forEach((moonMesh) => {
+      const { moon, parentMesh } = moonMesh.userData;
+      moonMesh.userData.angle += dt * moon.spd * 0.3 * spd;
+      const a = moonMesh.userData.angle;
+      moonMesh.position.set(
+        parentMesh.position.x + Math.cos(a) * moon.orbitR,
+        parentMesh.position.y,
+        parentMesh.position.z + Math.sin(a) * moon.orbitR
+      );
+      moonMesh.rotation.y += dt * 0.6;
+    });
+  }
 
   // Riposiziona le linee orbitali delle lune sul pianeta padre
   moonOrbitLines.forEach((line) => {

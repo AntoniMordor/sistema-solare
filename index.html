@@ -32,7 +32,7 @@
       🪐 Click — segui pianeta / luna
     </div>
 
-    <!-- Velocità -->
+    <!-- Velocità (dimmer in modalità reale) -->
     <div id="speed-box">
       <label for="speed-slider">VELOCITÀ</label>
       <input type="range" id="speed-slider" min="0" max="6" step="0.1" value="1" />
@@ -41,6 +41,37 @@
 
     <!-- Toggle orbite -->
     <button id="orbit-btn" class="on">◯ ORBITE</button>
+
+    <!-- ═══ Pannello Tempo Reale / Fuso Orario ═══ -->
+    <div id="time-panel">
+      <!-- Toggle modalità -->
+      <div id="mode-toggle">
+        <button id="btn-realtime" class="mode-btn active">● REALE</button>
+        <button id="btn-sim" class="mode-btn">SIMULAZIONE</button>
+      </div>
+
+      <!-- Orologio (visibile solo in modalità REALE) -->
+      <div id="time-display">
+        <div id="time-date">—</div>
+        <div id="time-clock">—</div>
+        <div id="tz-label-row">
+          <span>FUSO:</span>
+          <span id="tz-label">—</span>
+        </div>
+      </div>
+
+      <!-- Selettore fuso orario -->
+      <div id="tz-row">
+        <input
+          type="text"
+          id="tz-search"
+          placeholder="🔍 Cerca fuso orario..."
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <select id="tz-select" size="4" aria-label="Seleziona fuso orario"></select>
+      </div>
+    </div>
 
     <!-- Pannello info pianeta / luna -->
     <div id="info-panel">

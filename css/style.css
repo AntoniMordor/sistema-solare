@@ -359,3 +359,144 @@ canvas {
   color: rgba(100, 200, 255, 0.45);
   font-weight: 600;
 }
+
+/* ── Pannello tempo reale ─────────────────────────────────────────────────── */
+
+#time-panel {
+  position: fixed;
+  top: 110px;
+  left: 22px;
+  z-index: 100;
+  width: 238px;
+  background: rgba(0, 8, 25, 0.88);
+  border: 1px solid rgba(100, 200, 255, 0.2);
+  border-radius: 12px;
+  padding: 13px 15px 14px;
+  backdrop-filter: blur(8px);
+}
+
+#mode-toggle {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.mode-btn {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(100, 200, 255, 0.15);
+  border-radius: 6px;
+  padding: 6px 4px;
+  color: rgba(255, 255, 255, 0.78);
+  font-family: 'Orbitron', monospace;
+  font-size: 8px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.mode-btn.active {
+  background: rgba(100, 200, 255, 0.15);
+  border-color: rgba(100, 200, 255, 0.55);
+  color: #a8e4ff;
+  box-shadow: 0 0 10px rgba(100, 200, 255, 0.2);
+}
+
+#time-display {
+  text-align: center;
+  margin-bottom: 11px;
+}
+
+#time-date {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.45);
+  letter-spacing: 1px;
+  margin-bottom: 5px;
+  font-family: 'Exo 2', sans-serif;
+}
+
+#time-clock {
+  font-family: 'Orbitron', monospace;
+  font-size: 17px;
+  font-weight: 700;
+  color: #64c8ff;
+  letter-spacing: 2px;
+  text-shadow: 0 0 14px rgba(100, 200, 255, 0.55);
+}
+
+#tz-label-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 5px;
+}
+
+#tz-label-row span {
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.35);
+  font-family: 'Orbitron', monospace;
+  letter-spacing: 2px;
+  flex-shrink: 0;
+}
+
+#tz-label {
+  font-size: 10px;
+  color: rgba(100, 200, 255, 0.65);
+  font-family: 'Exo 2', sans-serif;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#tz-search {
+  width: 100%;
+  background: rgb(4, 12, 32);
+  border: 1px solid rgba(100, 200, 255, 0.15);
+  border-radius: 6px;
+  padding: 5px 8px;
+  color: #c8dff0;
+  font-size: 11px;
+  font-family: 'Exo 2', sans-serif;
+  outline: none;
+  margin-bottom: 5px;
+  transition: border-color 0.2s;
+}
+
+#tz-search:focus {
+  border-color: rgba(100, 200, 255, 0.45);
+}
+
+#tz-search::placeholder {
+  color: rgba(255, 255, 255, 0.25);
+}
+
+#tz-select {
+  width: 100%;
+  max-height: 130px;
+  background: rgba(0, 5, 18, 0.95);
+  border: 1px solid rgba(100, 200, 255, 0.15);
+  border-radius: 6px;
+  padding: 4px 6px;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 11px;
+  font-family: 'Exo 2', sans-serif;
+  outline: none;
+  cursor: pointer;
+}
+
+#tz-select:focus {
+  border-color: rgba(100, 200, 255, 0.4);
+}
+
+#tz-select option {
+  background: #000d22;
+  color: rgba(255, 255, 255, 0.8);
+  padding: 2px 4px;
+}
+
+#tz-select optgroup {
+  color: rgba(100, 200, 255, 0.6);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 600;
+}

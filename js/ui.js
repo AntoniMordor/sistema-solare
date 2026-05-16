@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { camera, renderer } from './scene.js';
 import { planetMeshes, orbitLines, moonMeshes, moonOrbitLines } from './planets.js';
 import { focusPlanet, exitFollow, isFollowing } from './cameraControl.js';
+import { setupTimeControl } from './timeControl.js';
 
 // ── Velocità ──────────────────────────────────────────────────────────────────
 
@@ -57,6 +58,8 @@ function showInfo(mesh) {
 // ── Setup ─────────────────────────────────────────────────────────────────────
 
 export function setupUI() {
+  setupTimeControl();
+
   const panel = document.getElementById('info-panel');
 
   // Chiudi pannello e rilascia follow

@@ -156,6 +156,61 @@ export function getMoonAngle(moonKey, jd) {
 }
 
 /**
+ * Ore UTC (0–24) da una JD.
+ * I JD partono a mezzogiorno: JD frac 0.0 = 12:00 UTC, frac 0.5 = 0:00 UTC.
+ */
+export function jdToUTCHours(jd) {
+  return (((jd % 1) + 1) % 1 * 24 + 12) % 24;
+}
+
+/**
+ * Longitudine sub-solare in gradi (longitudine terrestre che guarda il Sole).
+ * A UTC 12:00 il Sole è sopra il meridiano 0° (Greenwich).
+ */
+export function subSolarLongitude(jd) {
+  return (12 - jdToUTCHours(jd)) * 15; // gradi, [-180, 180]
+}
+
+/**
+ * Calcola rotation.y corretto per la Terra in modo che la faccia illuminata
+ * corrisponda all'ora UTC reale — terminatore giorno/notte scientifico.
+ *
+ * @param {number} earthOrbAngle  Angolo orbitale della Terra in radianti
+ *                                (mesh.userData.angle oppure Keplero lon)
+ * @param {number} jd             Julian Date corrente (o simulata)
+ */
+export function getEarthRotationY(earthOrbAngle, jd) {
+  const subSolarLon = subSolarLongitude(jd); // in degrees
+  return subSolarLon * DEG - earthOrbAngle + Math.PI / 2;
+}
+
+/**
+ * Stagione per l'emisfero nord/sud di un pianeta data la sua longitudine
+ * eclittica e la longitudine del solstizio estivo boreale.
+ *
+ * @param {number} lon       Longitudine eclittica del pianeta (radianti)
+ * @param {number} summerLon Longitudine al solstizio d'estate boreale (radianti)
+ *                           Per la Terra ≈ π/2 (90°, giugno)
+ * @returns {{ north: string, south: string }}
+ */
+export function getSeasons(lon, summerLon = Math.PI / 2) {
+  const NAMES_N = ['🌸 Primavera', '☀️ Estate', '🍂 Autunno', '❄️ Inverno'];
+  const NAMES_S = ['🍂 Autunno', '❄️ Inverno', '🌸 Primavera', '☀️ Estate'];
+  // Offset dalla longitudine di primavera boreale
+  const springLon = summerLon - Math.PI / 2;
+  let angle = ((lon - springLon) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
+  const idx = Math.floor(angle / (Math.PI / 2)) % 4;
+  return { north: NAMES_N[idx], south: NAMES_S[idx] };
+}
+
+/**
+ * Converte una JD in oggetto Date JavaScript.
+ */
+export function jdToDate(jd) {
+  return new Date((jd - 2440587.5) * 86400000);
+}
+
+/**
  * Formatta la JD come stringa ISO UTC (per debug/display).
  */
 export function jdToUTC(jd) {

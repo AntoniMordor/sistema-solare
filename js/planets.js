@@ -1,12 +1,69 @@
 import * as THREE from 'three';
 import { scene } from './scene.js';
 import { PLANETS } from './data.js';
-import { TEXTURE_MAP, txRing } from './textures.js';
+import { TEXTURE_MAP, txRing, txEarthDay, txEarthNight } from './textures.js';
 
 export const planetMeshes   = [];
 export const orbitLines     = [];
 export const moonMeshes     = [];
 export const moonOrbitLines = [];
+
+// Riferimenti interni alla Terra (accessibili tramite getter)
+let _earthMesh     = null;
+let _earthMaterial = null;
+export const getEarthMesh     = () => _earthMesh;
+export const getEarthMaterial = () => _earthMaterial;
+
+// ── Earth ShaderMaterial ──────────────────────────────────────────────────────
+
+const EARTH_VERT = /* glsl */`
+  varying vec3 vWorldNormal;
+  varying vec2 vUv;
+  void main() {
+    vWorldNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+const EARTH_FRAG = /* glsl */`
+  uniform sampler2D uDay;
+  uniform sampler2D uNight;
+  uniform vec3      uSunDir;   // dir. dal centro Terra verso il Sole (world space)
+
+  varying vec3 vWorldNormal;
+  varying vec2 vUv;
+
+  void main() {
+    vec3  N      = normalize(vWorldNormal);
+    float cosA   = dot(N, normalize(uSunDir));
+
+    // Zona terminatore ±10°  → smooth blend
+    float day    = smoothstep(-0.18, 0.18, cosA);
+
+    vec4 colDay   = texture2D(uDay,   vUv);
+    vec4 colNight = texture2D(uNight, vUv);
+
+    // Blend giorno/notte
+    vec4 color = mix(colNight, colDay, day);
+
+    // Diffuse sunlight sul lato giorno
+    float diff = max(0.0, cosA);
+    color.rgb *= mix(0.08, 1.0 + diff * 0.25, day);
+
+    // Bagliore atmosferico azzurro al terminatore
+    float rim = 1.0 - abs(cosA);
+    rim = pow(rim, 4.0);
+    color.rgb += vec3(0.05, 0.12, 0.28) * rim;
+
+    // Highlight speculare sull'oceano (canale blu alto = oceano)
+    float ocean   = clamp(colDay.b - colDay.g * 0.6, 0.0, 1.0);
+    float spec    = pow(max(0.0, cosA), 40.0) * ocean * day;
+    color.rgb    += vec3(0.4, 0.55, 0.7) * spec;
+
+    gl_FragColor = color;
+  }
+`;
 
 // ── Orbite ────────────────────────────────────────────────────────────────────
 
@@ -69,23 +126,38 @@ export function createPlanets() {
     scene.add(orbitLine);
     orbitLines.push(orbitLine);
 
-    // Mesh del pianeta
-    const mesh = new THREE.Mesh(
-      new THREE.SphereGeometry(p.R, 64, 64),
-      new THREE.MeshPhongMaterial({
+    // Materiale: Terra → ShaderMaterial day/night, altri → MeshPhongMaterial
+    let mat;
+    if (p.textureKey === 'earth') {
+      mat = new THREE.ShaderMaterial({
+        uniforms: {
+          uDay:    { value: txEarthDay() },
+          uNight:  { value: txEarthNight() },
+          uSunDir: { value: new THREE.Vector3(1, 0, 0) }, // aggiornato ogni frame
+        },
+        vertexShader:   EARTH_VERT,
+        fragmentShader: EARTH_FRAG,
+      });
+      _earthMaterial = mat;
+    } else {
+      mat = new THREE.MeshPhongMaterial({
         map: TEXTURE_MAP[p.textureKey](),
         emissive: new THREE.Color(p.emi),
         emissiveIntensity: p.emiI,
         shininess: p.shin,
         specular: new THREE.Color(0x333333),
-      })
-    );
+      });
+    }
+
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(p.R, 64, 64), mat);
     mesh.rotation.z = p.tilt;
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     mesh.userData = { type: 'planet', planet: p, angle: Math.random() * Math.PI * 2 };
     scene.add(mesh);
     planetMeshes.push(mesh);
+
+    if (p.textureKey === 'earth') _earthMesh = mesh;
 
     // Anelli di Saturno
     if (p.hasRings) {

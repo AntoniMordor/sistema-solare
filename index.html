@@ -60,6 +60,13 @@
         </div>
       </div>
 
+      <!-- Calendario simulato (visibile solo in modalità SIMULAZIONE) -->
+      <div id="sim-display">
+        <div id="sim-label">📅 SIMULAZIONE</div>
+        <div id="sim-date">—</div>
+        <div id="sim-time">—</div>
+      </div>
+
       <!-- Selettore fuso orario -->
       <div id="tz-row">
         <input
@@ -95,6 +102,10 @@
       <div class="row">
         <span class="lbl" id="lbl-extra">Lune</span>
         <span class="val" id="i-moons">—</span>
+      </div>
+      <div class="row" id="season-row">
+        <span class="lbl">Stagione attuale</span>
+        <span class="val" id="i-season" style="font-size:10px;letter-spacing:0">—</span>
       </div>
       <div class="divider"></div>
       <div id="p-desc"></div>

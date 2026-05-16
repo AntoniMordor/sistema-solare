@@ -111,9 +111,9 @@ canvas {
 }
 
 #exit-follow:hover {
-  background: rgba(100, 200, 255, 0.18);
+  background: rgb(18, 48, 80);
   box-shadow: 0 0 36px rgba(100, 200, 255, 0.45);
-  color: #fff;
+  color: #ffffff;
 }
 
 /* ── Controls hint ───────────────────────────────────────── */
@@ -383,11 +383,11 @@ canvas {
 
 .mode-btn {
   flex: 1;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgb(6, 14, 36);
   border: 1px solid rgba(100, 200, 255, 0.15);
   border-radius: 6px;
   padding: 6px 4px;
-  color: rgba(255, 255, 255, 0.78);
+  color: #b0c8e0;
   font-family: 'Orbitron', monospace;
   font-size: 8px;
   letter-spacing: 1px;
@@ -396,10 +396,43 @@ canvas {
 }
 
 .mode-btn.active {
-  background: rgba(100, 200, 255, 0.15);
+  background: rgb(8, 28, 56);
   border-color: rgba(100, 200, 255, 0.55);
-  color: #a8e4ff;
+  color: #d0f0ff;
   box-shadow: 0 0 10px rgba(100, 200, 255, 0.2);
+}
+
+/* Calendario simulato (sim mode) */
+#sim-display {
+  display: none;
+  text-align: center;
+  margin-bottom: 11px;
+  padding: 8px 0 4px;
+  border-top: 1px solid rgba(100, 200, 255, 0.12);
+}
+
+#sim-label {
+  font-size: 9px;
+  font-family: 'Orbitron', monospace;
+  color: rgba(100, 200, 255, 0.55);
+  letter-spacing: 2px;
+  margin-bottom: 5px;
+}
+
+#sim-date {
+  font-family: 'Orbitron', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: #a8e4ff;
+  letter-spacing: 1px;
+  margin-bottom: 3px;
+}
+
+#sim-time {
+  font-size: 10px;
+  color: rgba(100, 200, 255, 0.6);
+  font-family: 'Exo 2', sans-serif;
+  letter-spacing: 1px;
 }
 
 #time-display {

@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { camera, renderer } from './scene.js';
 import { planetMeshes, orbitLines, moonMeshes, moonOrbitLines } from './planets.js';
 import { focusPlanet, exitFollow, isFollowing } from './cameraControl.js';
-import { setupTimeControl } from './timeControl.js';
+import { setupTimeControl, getEffectiveJD } from './timeControl.js';
+import { getHeliocentricPosition, getSeasons } from './astronomy.js';
 
 // ── Velocità ──────────────────────────────────────────────────────────────────
 
@@ -11,8 +12,23 @@ export function getSpeed() { return speedMultiplier; }
 
 // ── Pannello informativo ──────────────────────────────────────────────────────
 
+function _computeSeason(textureKey, orbAngle) {
+  try {
+    const jd = getEffectiveJD();
+    const { lon } = getHeliocentricPosition(textureKey, jd);
+    // In simulazione l'angolo orbitale potrebbe divergere dal kepleriano;
+    // usiamo il kepleriano in real-time, l'angolo mesh in simulazione.
+    const effectiveLon = Number.isFinite(lon) ? lon : orbAngle;
+    return getSeasons(effectiveLon);
+  } catch {
+    return null;
+  }
+}
+
 function showInfo(mesh) {
-  const isMoon = mesh.userData.type === 'moon';
+  const isMoon  = mesh.userData.type === 'moon';
+  const elSeason     = document.getElementById('i-season');
+  const elSeasonRow  = document.getElementById('season-row');
 
   if (isMoon) {
     const m = mesh.userData.moon;
@@ -25,6 +41,7 @@ function showInfo(mesh) {
     document.getElementById('i-diam').textContent    = m.info.diam;
     document.getElementById('i-moons').textContent   = m.info.parentPlanet;
     document.getElementById('p-desc').textContent    = m.info.desc;
+    if (elSeasonRow) elSeasonRow.style.display = 'none';
   } else {
     const p = mesh.userData.planet;
     document.getElementById('p-name').textContent    = p.name;
@@ -36,6 +53,17 @@ function showInfo(mesh) {
     document.getElementById('i-diam').textContent    = p.info.diam;
     document.getElementById('i-moons').textContent   = p.info.moons;
     document.getElementById('p-desc').textContent    = p.info.desc;
+
+    // Stagioni correnti del pianeta
+    if (elSeasonRow && elSeason) {
+      const season = _computeSeason(p.textureKey, mesh.userData.angle ?? 0);
+      if (season) {
+        elSeason.textContent = `${season.north} (N) · ${season.south} (S)`;
+        elSeasonRow.style.display = '';
+      } else {
+        elSeasonRow.style.display = 'none';
+      }
+    }
   }
 
   // Miniatura del corpo celeste

@@ -6,9 +6,10 @@
 
 // ── Stato interno ─────────────────────────────────────────────────────────────
 
-let _realTimeMode = true;          // default: tempo reale
-let _selectedTZ   = _detectTZ();   // fuso orario del PC
+let _realTimeMode = true;
+let _selectedTZ   = _detectTZ();
 let _clockTimer   = null;
+let _effectiveJD  = Date.now() / 86400000 + 2440587.5;
 
 // ── Riferimenti DOM ───────────────────────────────────────────────────────────
 
@@ -17,8 +18,8 @@ let elDate, elClock, elTZLabel, elSearch, elSelect;
 // ── Rilevamento fuso orario ───────────────────────────────────────────────────
 
 function _detectTZ() {
-  try { return Intl.DateTimeFormat().resolvedOptions().timeZone; }
-  catch { return 'UTC'; }
+  try    { return Intl.DateTimeFormat().resolvedOptions().timeZone; }
+  catch  { return 'UTC'; }
 }
 
 // ── Formattazione ─────────────────────────────────────────────────────────────
@@ -43,13 +44,16 @@ function _fmtOffset() {
     const utcMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(),
                            now.getUTCHours(), now.getUTCMinutes(), now.getUTCSeconds());
     const tzMs  = new Date(now.toLocaleString('en-US', { timeZone: _selectedTZ })).getTime();
-    const offH  = Math.round((tzMs - utcMs) / 3600000 * 2) / 2; // arrotonda a 0.5h
+    const offH  = Math.round((tzMs - utcMs) / 3600000 * 2) / 2;
     const sign  = offH >= 0 ? '+' : '−';
     const abs   = Math.abs(offH);
     const h     = Math.floor(abs);
     const m     = Math.round((abs - h) * 60);
     return `UTC${sign}${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-  } catch { return 'UTC'; }
+  } catch (err) {
+    console.warn('Timezone offset error:', err);
+    return 'UTC';
+  }
 }
 
 // ── Orologio ──────────────────────────────────────────────────────────────────
@@ -59,7 +63,7 @@ function _tick() {
   const now = new Date();
   elDate.textContent  = _fmtDate(now);
   elClock.textContent = `${_fmtTime(now)}  ${_fmtOffset()}`;
-  if (elTZLabel) elTZLabel.textContent = _selectedTZ.replace(/_/g, ' ');
+  if (elTZLabel) elTZLabel.textContent = _selectedTZ.replaceAll('_', ' ');
 }
 
 function _startClock() {
@@ -72,56 +76,76 @@ function _startClock() {
 
 let _allTZ = [];
 
+function _buildGroups(list) {
+  const groups = {};
+  list.forEach(tz => {
+    const [region] = tz.split('/');
+    if (!groups[region]) groups[region] = [];
+    groups[region].push(tz);
+  });
+  return groups;
+}
+
 function _buildSelect(filter) {
-  const q       = filter ? filter.toLowerCase().replace(/\s/g, '_') : '';
+  const q       = filter ? filter.toLowerCase().replaceAll(' ', '_') : '';
   const matched = q ? _allTZ.filter(tz => tz.toLowerCase().includes(q)) : _allTZ;
 
   elSelect.innerHTML = '';
 
-  // Raggruppa per continente/regione
-  const groups = {};
-  matched.forEach(tz => {
-    const [region] = tz.split('/');
-    (groups[region] ??= []).push(tz);
-  });
+  const groups = _buildGroups(matched);
 
-  Object.keys(groups).sort().forEach(region => {
-    const og = document.createElement('optgroup');
-    og.label = region;
-    groups[region].forEach(tz => {
-      const opt       = document.createElement('option');
-      opt.value       = tz;
-      opt.textContent = tz.replace(/_/g, ' ');
-      if (tz === _selectedTZ) opt.selected = true;
-      og.appendChild(opt);
+  Object.keys(groups)
+    .sort((a, b) => a.localeCompare(b))
+    .forEach(region => {
+      const og = document.createElement('optgroup');
+      og.label = region;
+      groups[region].forEach(tz => {
+        const opt       = document.createElement('option');
+        opt.value       = tz;
+        opt.textContent = tz.replaceAll('_', ' ');
+        if (tz === _selectedTZ) opt.selected = true;
+        og.appendChild(opt);
+      });
+      elSelect.appendChild(og);
     });
-    elSelect.appendChild(og);
+}
+
+// ── Visibilità elementi per modalità ─────────────────────────────────────────
+
+function _showRealElements(visible) {
+  const ids  = ['time-display', 'tz-row'];
+  const show = visible ? '' : 'none';
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = show;
   });
+}
+
+function _showSimElements(visible) {
+  const el = document.getElementById('sim-display');
+  if (el) el.style.display = visible ? '' : 'none';
+}
+
+function _setSpeedBoxEnabled(enabled) {
+  const sb = document.getElementById('speed-box');
+  if (!sb) return;
+  sb.style.opacity       = enabled ? '1' : '0.3';
+  sb.style.pointerEvents = enabled ? '' : 'none';
 }
 
 // ── Cambia modalità ───────────────────────────────────────────────────────────
 
 function _applyMode(realTime) {
   _realTimeMode = realTime;
-  const timeDisplay = document.getElementById('time-display');
-  const tzRow       = document.getElementById('tz-row');
-  const speedBox    = document.getElementById('speed-box');
-  const btnReal     = document.getElementById('btn-realtime');
-  const btnSim      = document.getElementById('btn-sim');
 
-  btnReal.classList.toggle('active', realTime);
-  btnSim.classList.toggle('active', !realTime);
+  document.getElementById('btn-realtime')?.classList.toggle('active',  realTime);
+  document.getElementById('btn-sim')?.classList.toggle('active', !realTime);
 
-  if (realTime) {
-    if (timeDisplay) timeDisplay.style.display = '';
-    if (tzRow) tzRow.style.display = '';
-    if (speedBox) { speedBox.style.opacity = '0.3'; speedBox.style.pointerEvents = 'none'; }
-    _startClock();
-  } else {
-    if (timeDisplay) timeDisplay.style.display = 'none';
-    if (tzRow) tzRow.style.display = 'none';
-    if (speedBox) { speedBox.style.opacity = '1'; speedBox.style.pointerEvents = ''; }
-  }
+  _showRealElements(realTime);
+  _showSimElements(!realTime);
+  _setSpeedBoxEnabled(!realTime);
+
+  if (realTime) _startClock();
 }
 
 // ── Setup pubblico ────────────────────────────────────────────────────────────
@@ -133,40 +157,65 @@ export function setupTimeControl() {
   elSearch  = document.getElementById('tz-search');
   elSelect  = document.getElementById('tz-select');
 
-  // Carica lista fusi orari
-  try       { _allTZ = Intl.supportedValuesOf('timeZone'); }
-  catch (_) { _allTZ = ['Africa/Cairo','America/New_York','America/Los_Angeles',
-    'America/Chicago','America/Sao_Paulo','Asia/Tokyo','Asia/Shanghai','Asia/Kolkata',
-    'Asia/Dubai','Australia/Sydney','Europe/London','Europe/Paris','Europe/Rome',
-    'Europe/Berlin','Europe/Moscow','Pacific/Auckland','Pacific/Honolulu','UTC']; }
+  try {
+    _allTZ = Intl.supportedValuesOf('timeZone');
+  } catch (err) {
+    console.warn('Intl.supportedValuesOf not available, using fallback:', err);
+    _allTZ = [
+      'Africa/Cairo', 'America/New_York', 'America/Los_Angeles', 'America/Chicago',
+      'America/Sao_Paulo', 'Asia/Tokyo', 'Asia/Shanghai', 'Asia/Kolkata', 'Asia/Dubai',
+      'Australia/Sydney', 'Europe/London', 'Europe/Paris', 'Europe/Rome',
+      'Europe/Berlin', 'Europe/Moscow', 'Pacific/Auckland', 'Pacific/Honolulu', 'UTC',
+    ];
+  }
 
   _buildSelect('');
 
-  // Selezione fuso
-  elSelect.addEventListener('change', () => {
-    _selectedTZ = elSelect.value;
-    _tick();
-  });
+  elSelect.addEventListener('change', () => { _selectedTZ = elSelect.value; _tick(); });
+  elSearch.addEventListener('input',  () => _buildSelect(elSearch.value));
 
-  // Ricerca fuso
-  elSearch.addEventListener('input', () => {
-    _buildSelect(elSearch.value);
-  });
+  document.getElementById('btn-realtime')?.addEventListener('click', () => _applyMode(true));
+  document.getElementById('btn-sim')?.addEventListener('click',      () => _applyMode(false));
 
-  // Toggle modalità
-  document.getElementById('btn-realtime').addEventListener('click', () => _applyMode(true));
-  document.getElementById('btn-sim').addEventListener('click',      () => _applyMode(false));
-
-  // Avvia in modalità REALE
   _applyMode(true);
 }
 
-// ── Getter pubblici ───────────────────────────────────────────────────────────
+// ── Getter / Setter pubblici ──────────────────────────────────────────────────
 
-/** Restituisce true se siamo in modalità Tempo Reale. */
+/** true se modalità Tempo Reale attiva. */
 export function isRealTimeMode() { return _realTimeMode; }
 
-/** Restituisce la Julian Date corrente (sempre UTC, timezone solo per display). */
+/** Julian Date basata sull'ora UTC corrente del PC. */
 export function getCurrentJD() {
-  return new Date().getTime() / 86400000 + 2440587.5;
+  return Date.now() / 86400000 + 2440587.5;
+}
+
+/**
+ * Memorizza la JD effettiva corrente (reale o simulata).
+ * Usata da main.js ad ogni frame; consultata da ui.js per stagioni/info.
+ */
+export function updateEffectiveJD(jd) { _effectiveJD = jd; }
+
+/** Restituisce la JD effettiva corrente (reale in modalità REALE, simulata in SIM). */
+export function getEffectiveJD() {
+  return _realTimeMode ? getCurrentJD() : _effectiveJD;
+}
+
+/**
+ * Aggiorna il display del calendario simulato (chiamato ogni frame in modalità SIM).
+ * @param {Date} date
+ */
+export function setSimulatedDate(date) {
+  const elSimDate = document.getElementById('sim-date');
+  const elSimTime = document.getElementById('sim-time');
+  if (!elSimDate || !elSimTime) return;
+
+  elSimDate.textContent = new Intl.DateTimeFormat('it-IT', {
+    weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
+  }).format(date);
+
+  elSimTime.textContent = new Intl.DateTimeFormat('it-IT', {
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false, timeZone: 'UTC',
+  }).format(date) + ' UTC';
 }

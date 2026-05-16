@@ -41,21 +41,224 @@ function txVenus() {
   });
 }
 
-function txEarth() {
-  return mkTex(512, 256, (ctx, w, h) => {
-    ctx.fillStyle = '#1a5c8a'; ctx.fillRect(0, 0, w, h);
-    [[40,55,120,95,'#2a7a44'],[95,145,68,88,'#287040'],[215,45,85,165,'#2d8050'],
-     [285,35,175,125,'#317848'],[345,155,85,62,'#2e7642']].forEach(([x,y,w2,h2,c]) => {
-      ctx.fillStyle = c; ctx.fillRect(x, y, w2, h2);
+// ── Earth realistic textures ──────────────────────────────────────────────────
+
+/** Converte lon/lat in pixel su canvas 1024×512. */
+function ll(lon, lat, w, h) {
+  return [(lon + 180) / 360 * w, (90 - lat) / 180 * h];
+}
+
+/** Disegna un poligono (array di [lon,lat]) sul canvas. */
+function poly(ctx, pts, w, h) {
+  ctx.beginPath();
+  pts.forEach(([lon, lat], i) => {
+    const [x, y] = ll(lon, lat, w, h);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.closePath();
+}
+
+// Continenti semplificati ma riconoscibili [lon, lat]
+const LAND = [
+  // Nord America
+  { c:'#2d6a2a', p:[[-168,71],[-141,60],[-128,50],[-124,47],[-117,32],[-107,23],[-90,20],
+    [-83,10],[-78,9],[-77,8],[-80,9],[-85,11],[-90,16],[-97,20],[-105,23],[-110,22],[-117,30],
+    [-118,33],[-120,40],[-124,47],[-125,50],[-130,55],[-140,60],[-155,58],[-162,62],[-168,66]] },
+  // Groenlandia
+  { c:'#d8eef8', p:[[-73,76],[-22,83],[-14,77],[-22,72],[-40,66],[-52,67],[-68,76]] },
+  // Sud America
+  { c:'#266622', p:[[-78,12],[-63,11],[-60,6],[-50,5],[-35,-4],[-35,-8],[-38,-12],
+    [-40,-20],[-43,-23],[-46,-30],[-52,-34],[-56,-36],[-65,-42],[-68,-55],[-75,-50],
+    [-73,-38],[-70,-28],[-72,-18],[-75,-10],[-78,0],[-78,8]] },
+  // Europa continentale
+  { c:'#3a8a3a', p:[[-9,38],[-9,44],[-3,44],[3,44],[8,44],[10,44],[14,44],[20,44],
+    [28,44],[30,46],[32,47],[38,47],[38,54],[32,60],[28,60],[26,60],[24,58],[20,62],
+    [22,66],[20,70],[15,70],[12,66],[5,62],[2,58],[2,52],[-4,51],[-5,48],[-2,48],
+    [-4,44],[-8,44],[-10,40]] },
+  // Scandinavia
+  { c:'#3a8a3a', p:[[5,58],[8,56],[18,56],[24,58],[28,60],[28,66],[22,70],[17,70],
+    [14,69],[12,66],[6,62]] },
+  // Isole Britanniche
+  { c:'#3a8540', p:[[-5,50],[-4,51],[-3,57],[-2,58],[-4,58],[-5,58],[-7,58],[-6,55],
+    [-7,54],[-8,52],[-6,51],[-5,50]] },
+  // ITALIA — stivale riconoscibile
+  { c:'#3a9040', p:[[8,44],[14,44],[14,43],[16,41],[18,40.5],[18,40],[17,39.5],
+    [16.5,38.5],[15.5,37.5],[15,37],[16,37.2],[16,37],[15.5,36.6],
+    [13,36.5],[11,37],[9,38],[8.5,40],[8,44]] },
+  // Sardegna
+  { c:'#3a8540', p:[[8.2,41.5],[9.8,41.5],[9.8,38.8],[8.2,38.8]] },
+  // Sicilia
+  { c:'#3a8540', p:[[12,38.3],[15.7,38.3],[15.7,37],[12,37]] },
+  // Grecia + Balcani
+  { c:'#3a8540', p:[[20,42],[22,42],[26,40],[26,38],[24,36],[22,38],[20,38],[20,42]] },
+  // Africa
+  { c:'#7a6a20', p:[[-17,15],[-14,10],[-10,5],[0,5],[8,4],[10,1],[10,-2],[12,-5],
+    [12,-14],[14,-22],[17,-28],[20,-35],[28,-35],[32,-30],[36,-22],[40,-12],[44,-12],
+    [44,12],[42,14],[50,14],[44,18],[40,22],[32,22],[32,30],[35,30],[34,25],[32,22],
+    [20,22],[12,20],[8,16],[0,15],[-8,15]] },
+  // Madagascar
+  { c:'#6a7830', p:[[43.5,-12],[50,-14],[50,-26],[44,-26],[44,-12]] },
+  // Penisola arabica
+  { c:'#c8a030', p:[[32,30],[37,24],[38,22],[44,14],[50,12],[56,20],[58,22],[56,28],
+    [50,30],[44,30],[38,30]] },
+  // Asia corpo principale
+  { c:'#5a7a30', p:[[26,42],[32,42],[36,42],[40,38],[44,36],[50,36],[56,28],[58,22],
+    [60,20],[62,18],[68,24],[72,22],[80,25],[88,22],[96,22],[98,18],[100,4],
+    [104,2],[110,2],[110,14],[108,18],[108,22],[110,25],[115,22],[118,24],[120,30],
+    [122,32],[122,40],[120,44],[118,50],[120,54],[126,54],[132,54],[140,52],[142,52],
+    [140,58],[132,62],[130,66],[120,72],[100,72],[80,72],[68,72],[60,68],[60,62],
+    [62,58],[58,56],[56,52],[56,50],[60,46],[56,44],[50,40],[44,42],[40,40],[36,42]] },
+  // Subcontinente indiano
+  { c:'#5a8820', p:[[68,24],[72,22],[80,25],[88,22],[88,14],[80,10],[77,8],[72,8],
+    [68,14],[65,22],[68,24]] },
+  // Giappone (semplificato)
+  { c:'#3a7a3a', p:[[130,32],[131,34],[133,36],[137,38],[140,40],[141,42],[142,44],
+    [143,44],[141,42],[138,36],[134,34],[130,32]] },
+  // Australia
+  { c:'#8a6a20', p:[[114,-22],[118,-20],[124,-16],[130,-12],[136,-12],[138,-14],
+    [140,-18],[142,-18],[145,-14],[148,-20],[150,-24],[152,-27],[154,-28],[153,-32],
+    [152,-34],[150,-36],[148,-38],[146,-38],[140,-36],[136,-34],[130,-32],[125,-32],
+    [118,-28],[114,-22]] },
+  // Nuova Guinea
+  { c:'#3a7a3a', p:[[132,-2],[136,-4],[140,-6],[146,-6],[150,-6],[150,-8],[145,-8],
+    [140,-8],[135,-6],[132,-4]] },
+];
+
+// Deserto del Sahara e aree aride
+const DESERTS = [
+  { c:'#c8a840', p:[[-6,20],[20,20],[20,32],[14,32],[8,20],[0,18],[-6,20]] },
+  { c:'#d4a830', p:[[44,28],[60,28],[60,18],[44,18]] }, // Arabia
+  { c:'#c8a040', p:[[44,30],[60,30],[56,36],[44,36]] }, // Anatolia/Iran
+];
+
+export function txEarthDay() {
+  return mkTex(1024, 512, (ctx, w, h) => {
+    // Oceano
+    const ocean = ctx.createLinearGradient(0, 0, 0, h);
+    ocean.addColorStop(0, '#1a4f8a');
+    ocean.addColorStop(0.5, '#1a5f9a');
+    ocean.addColorStop(1, '#104060');
+    ctx.fillStyle = ocean; ctx.fillRect(0, 0, w, h);
+
+    // Disegna deserto prima (sotto i continenti)
+    DESERTS.forEach(({ c, p }) => { poly(ctx, p, w, h); ctx.fillStyle = c; ctx.fill(); });
+
+    // Disegna continenti
+    LAND.forEach(({ c, p }) => { poly(ctx, p, w, h); ctx.fillStyle = c; ctx.fill(); });
+
+    // Bordi costa (leggermente più scuri)
+    LAND.forEach(({ p }) => {
+      poly(ctx, p, w, h);
+      ctx.strokeStyle = 'rgba(0,0,0,0.18)'; ctx.lineWidth = 0.8; ctx.stroke();
     });
-    ctx.fillStyle = '#d8eef8'; ctx.fillRect(0, 0, w, 14); ctx.fillRect(0, 242, w, 14);
-    ctx.fillStyle = '#c0dff0'; ctx.fillRect(70, 16, 55, 36);
-    ctx.globalAlpha = 0.38; ctx.fillStyle = '#ffffff';
-    for (let i = 0; i < 22; i++) {
+
+    // Calotte polari
+    ctx.fillStyle = '#e8f4ff';
+    ctx.fillRect(0, 0, w, 28);      // Artico
+    ctx.fillRect(0, h - 22, w, 22); // Antartide
+
+    // Ghiaccio Groenlandia extra
+    ctx.globalAlpha = 0.6;
+    ctx.fillStyle = '#ddf0ff';
+    poly(ctx, [[-74,76],[-20,83],[-14,77],[-22,72],[-40,66],[-52,67],[-68,76]], w, h);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // Nuvole sparse
+    ctx.globalAlpha = 0.22;
+    ctx.fillStyle = '#ffffff';
+    const seed = 42; // deterministico
+    const rng = (n) => ((Math.sin(n * 127.1 + seed) * 43758.5453) % 1 + 1) % 1;
+    for (let i = 0; i < 60; i++) {
+      const cx = rng(i * 2) * w;
+      const cy = rng(i * 2 + 1) * h;
+      const rx = rng(i + 100) * 60 + 20;
+      const ry = rng(i + 200) * 14 + 5;
       ctx.beginPath();
-      ctx.ellipse(Math.random()*w, Math.random()*h, Math.random()*55+18, Math.random()*12+4, 0, 0, Math.PI*2);
+      ctx.ellipse(cx, cy, rx, ry, rng(i) * Math.PI, 0, Math.PI * 2);
       ctx.fill();
     }
+    ctx.globalAlpha = 1;
+  });
+}
+
+export function txEarthNight() {
+  return mkTex(1024, 512, (ctx, w, h) => {
+    // Sfondo scuro — oceano notturno
+    ctx.fillStyle = '#020810'; ctx.fillRect(0, 0, w, h);
+
+    // Silhouette continenti quasi nere
+    LAND.concat(DESERTS).forEach(({ p }) => {
+      poly(ctx, p, w, h);
+      ctx.fillStyle = '#0a0d08'; ctx.fill();
+    });
+
+    // Luci città — ogni cluster è [lon, lat, intensità 0-1, raggio]
+    const CITIES = [
+      // Europa occidentale (densissima)
+      [2, 48, 1, 20], [13, 52, 0.9, 18], [9, 51, 0.9, 16], [2, 51, 0.8, 14],
+      [4, 52, 0.85, 12], [12, 42, 0.85, 16], [23, 38, 0.6, 10], // Roma, Atene
+      [-3, 40, 0.8, 14], [-9, 39, 0.7, 10], [19, 47, 0.65, 10],
+      [21, 52, 0.6, 10], [14, 50, 0.75, 10], [26, 44, 0.55, 8],
+      [30, 50, 0.7, 10], [37, 55, 0.8, 14], // Mosca
+      // Italia specifica
+      [12, 41.9, 0.9, 10], // Roma
+      [9.2, 45.5, 0.85, 8], // Milano
+      [14.3, 40.8, 0.8, 7], // Napoli
+      [11.3, 43.8, 0.7, 5], // Firenze
+      [12.3, 45.4, 0.65, 5], // Venezia
+      [7.7, 45, 0.6, 5],    // Torino
+      // USA est
+      [-74, 41, 1, 28], [-77, 39, 0.95, 22], [-71, 42, 0.9, 20],
+      [-84, 34, 0.85, 18], [-80, 26, 0.8, 16], [-87, 42, 0.9, 20],
+      // USA ovest
+      [-118, 34, 0.95, 22], [-122, 37, 0.9, 18], [-122, 48, 0.75, 14],
+      // USA centro
+      [-94, 30, 0.8, 16], [-90, 30, 0.75, 14], [-96, 36, 0.7, 12],
+      // Giappone
+      [139, 36, 1, 24], [135, 34.7, 0.95, 20], [130, 33.6, 0.8, 14],
+      // Cina costa
+      [121, 31, 0.95, 22], [116, 40, 0.9, 20], [114, 22, 0.85, 16],
+      [113, 23, 0.8, 14], [120, 30, 0.75, 12],
+      // Korea/NE Asia
+      [127, 37, 0.85, 14], [126, 38, 0.5, 6],
+      // India
+      [72, 19, 0.85, 16], [77, 28, 0.8, 16], [88, 22.5, 0.8, 14],
+      [80, 13, 0.75, 12], [77, 11, 0.65, 10],
+      // SE Asia
+      [101, 3.2, 0.75, 12], [100, 14, 0.6, 10], [106, 10.8, 0.7, 10],
+      // Medio Oriente
+      [55, 25, 0.8, 12], [46, 25, 0.75, 12], [44, 33, 0.7, 10],
+      // Australia
+      [151, -34, 0.8, 14], [145, -38, 0.7, 12], [115, -32, 0.6, 10],
+      // Sud America
+      [-46, -23, 0.85, 16], [-43, -23, 0.8, 14], [-58, -34, 0.75, 12],
+      [-70, -33, 0.7, 10], [-74, 4.7, 0.65, 10],
+      // Africa
+      [28, -26, 0.7, 12], [18, -34, 0.65, 10], [31, 30, 0.7, 12],
+      [3, 6.4, 0.6, 10], [-17, 14.7, 0.55, 8],
+    ];
+
+    CITIES.forEach(([lon, lat, intensity, radius]) => {
+      const [cx, cy] = ll(lon, lat, w, h);
+      const px = radius * (w / 360); // raggio in pixel proporzionale
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, px);
+      const r = Math.round(255 * intensity);
+      const g2 = Math.round(200 * intensity);
+      const b = Math.round(120 * intensity);
+      g.addColorStop(0, `rgba(${r},${g2},${b},0.95)`);
+      g.addColorStop(0.3, `rgba(${r},${g2},${b},0.5)`);
+      g.addColorStop(0.7, `rgba(${Math.round(r*0.6)},${Math.round(g2*0.5)},${Math.round(b*0.4)},0.2)`);
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(cx - px, cy - px, px * 2, px * 2);
+    });
+
+    // Calotte polari (riflettono un po' di luce)
+    ctx.globalAlpha = 0.15;
+    ctx.fillStyle = '#334466';
+    ctx.fillRect(0, 0, w, 25);
+    ctx.fillRect(0, h - 20, w, 20);
     ctx.globalAlpha = 1;
   });
 }
@@ -432,7 +635,7 @@ export function txRing() {
 
 export const TEXTURE_MAP = {
   // Pianeti
-  mercury: txMercury, venus: txVenus, earth: txEarth, mars: txMars,
+  mercury: txMercury, venus: txVenus, earth: txEarthDay, mars: txMars,
   jupiter: txJupiter, saturn: txSaturn, uranus: txUranus, neptune: txNeptune,
   // Lune
   luna: txLuna,

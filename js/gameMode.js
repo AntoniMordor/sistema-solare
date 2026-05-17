@@ -6,21 +6,22 @@
 import * as THREE from 'three';
 import { scene } from './scene.js';
 import { planetMeshes, moonMeshes } from './planets.js';
+import { getSunMesh, hideSun, restoreSun } from './sun.js';
 
 // ── Catalogo catastrofi ───────────────────────────────────────────────────────
 
 export const CATASTROPHES = [
   {
     id: 'blackhole', name: 'Buco Nero', icon: '⚫', color: '#aa44ff',
-    info: 'Singolarità gravitazionale: F = GM/r². Distorce lo spaziotempo. I pianeti vengono "spaghettificati" dalle forze mareali prima di scomparire oltre l\'orizzonte degli eventi. Clicca per posizionare la singolarità.',
+    info: 'Singolarità gravitazionale: F = GM/r². Distorce lo spaziotempo. I pianeti vengono "spaghettificati" dalle forze mareali prima di scomparire oltre l\'orizzonte degli eventi. Anche il Sole viene inghiottito. Clicca per posizionare la singolarità.',
   },
   {
     id: 'meteorite', name: 'Meteorite', icon: '🪨', color: '#cc8844',
     info: 'Corpo roccioso massiccio in rotta di collisione. Energia cinetica: KE = ½mv². Un impattore di 500 km libera energia pari a miliardi di bombe H, volatilizzando crosta e mantello planetario.',
   },
   {
-    id: 'comet', name: 'Cometa', icon: '☄️', color: '#88ddff',
-    info: 'Nucleo di ghiaccio e polvere dalla Nube di Oort. Sviluppa una coda ionica (blu, punta lontano dal Sole) e una coda di polvere (gialla, incurvata). All\'impatto rilascia gas volatili ed energia cinetica.',
+    id: 'alien', name: 'Minaccia Aliena', icon: '🛸', color: '#00ff88',
+    info: 'Una flotta di 4 astronavi aliene ha rilevato vita nel sistema solare. Gli UFO si avvicinano ai pianeti, li sorvolano e li disintegrano con raggi laser al plasma ad alta energia. Nessuna difesa è possibile.',
   },
   {
     id: 'gamma', name: 'Raggio Gamma', icon: '⚡', color: '#00ffbb',
@@ -31,9 +32,9 @@ export const CATASTROPHES = [
 // ── Stato interno ─────────────────────────────────────────────────────────────
 
 let _active     = false;
-let _selectedId = '';   // vuoto: l'utente deve selezionare esplicitamente
-let _cats        = [];   // catastrofi attive
-let _explosions  = [];   // particelle esplosione
+let _selectedId = '';
+let _cats        = [];
+let _explosions  = [];
 let _destroyed   = new Set();
 
 // ── Explosion particles ───────────────────────────────────────────────────────
@@ -116,6 +117,7 @@ function _gameLog(name) {
 function mkBlackHole(pos) {
   const R = 4, GM = 14000;
   const meshes = [];
+  let sunDestroyed = false;
 
   const core = new THREE.Mesh(
     new THREE.SphereGeometry(R, 32, 32),
@@ -151,6 +153,8 @@ function mkBlackHole(pos) {
       disk.rotation.z   += dt * 0.55;
       diskIn.rotation.z -= dt * 1.1;
       glow.material.opacity = 0.15 + Math.sin(age * 1.5) * 0.07;
+
+      // Pull planets
       planetMeshes.forEach(mesh => {
         if (_destroyed.has(mesh)) return;
         const dir  = new THREE.Vector3().subVectors(pos, mesh.position);
@@ -160,6 +164,27 @@ function mkBlackHole(pos) {
         const t = Math.max(0, 1 - dist / (R * 7));
         mesh.scale.set(1 - t * 0.6, 1 - t * 0.6, 1 + t * 3);
       });
+
+      // Pull and destroy the sun
+      if (!sunDestroyed) {
+        const sunM = getSunMesh();
+        if (sunM) {
+          const sunDir  = new THREE.Vector3().subVectors(pos, sunM.position);
+          const sunDist = Math.max(sunDir.length(), 0.1);
+          if (sunDist < R * 2) {
+            sunDestroyed = true;
+            hideSun();
+            spawnExplosion(sunM.position.clone(), 0xffaa22, 350, 40);
+            _gameLog('☀️ Sole');
+          } else {
+            sunM.position.addScaledVector(sunDir.normalize(), (GM * 5 / (sunDist * sunDist)) * dt);
+            // Spaghettification
+            const squish = Math.max(0, 1 - sunDist / (R * 12));
+            sunM.scale.set(1 - squish * 0.5, 1 - squish * 0.5, 1 + squish * 5);
+          }
+        }
+      }
+
       return true;
     },
     dispose() { meshes.forEach(m => { scene.remove(m); m.geometry.dispose(); m.material.dispose(); }); },
@@ -278,114 +303,7 @@ function mkMeteorite(pos) {
   };
 }
 
-// ── Factory: Cometa ───────────────────────────────────────────────────────────
-// Nucleo ghiacciato + coda ionica (blu, lunga) + coda di polvere (gialla, corta)
-
-function mkComet(pos) {
-  const dir   = pos.clone().negate().normalize();
-  const speed = 44;
-  const nucR  = 1.6;
-  let age = 0, hit = false;
-
-  // Nucleo — sferico, leggermente irregolare
-  const nucGeo = new THREE.SphereGeometry(nucR, 12, 12);
-  const nucPos = nucGeo.attributes.position;
-  for (let i = 0; i < nucPos.count; i++) {
-    const x = nucPos.getX(i), y = nucPos.getY(i), z = nucPos.getZ(i);
-    const n = 1 + Math.sin(x * 8 + z * 5) * 0.1;
-    nucPos.setXYZ(i, x*n, y*n, z*n);
-  }
-  nucPos.needsUpdate = true;
-  nucGeo.computeVertexNormals();
-  const nucleus = new THREE.Mesh(nucGeo,
-    new THREE.MeshPhongMaterial({ color: 0x9aaecc, emissive: 0x112233, shininess: 14 })
-  );
-  nucleus.position.copy(pos); scene.add(nucleus);
-
-  // Coma — alone azzurro intorno al nucleo
-  const coma = new THREE.Mesh(
-    new THREE.SphereGeometry(nucR * 3.5, 16, 16),
-    new THREE.MeshBasicMaterial({ color: 0x66bbff, transparent: true, opacity: 0.22,
-      blending: THREE.AdditiveBlending, depthWrite: false })
-  );
-  coma.position.copy(pos); scene.add(coma);
-
-  // Coda ionica — lunga, blu brillante, punta esattamente nella direzione di volo
-  const ionN = 160;
-  const ionArr = new Float32Array(ionN * 3);
-  for (let i = 0; i < ionN; i++) { ionArr[i*3]=pos.x; ionArr[i*3+1]=pos.y; ionArr[i*3+2]=pos.z; }
-  const ionGeo = new THREE.BufferGeometry();
-  ionGeo.setAttribute('position', new THREE.BufferAttribute(ionArr, 3));
-  const ionTail = new THREE.Points(ionGeo, new THREE.PointsMaterial({
-    color: 0x44ccff, size: 0.9, transparent: true, opacity: 0.75,
-    blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
-  }));
-  scene.add(ionTail);
-
-  // Coda di polvere — più corta, giallo-bianca, leggermente deviata
-  const dustN = 80;
-  const dustArr = new Float32Array(dustN * 3);
-  for (let i = 0; i < dustN; i++) { dustArr[i*3]=pos.x; dustArr[i*3+1]=pos.y; dustArr[i*3+2]=pos.z; }
-  const dustGeo = new THREE.BufferGeometry();
-  dustGeo.setAttribute('position', new THREE.BufferAttribute(dustArr, 3));
-  const dustTail = new THREE.Points(dustGeo, new THREE.PointsMaterial({
-    color: 0xffeeaa, size: 1.1, transparent: true, opacity: 0.55,
-    blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
-  }));
-  scene.add(dustTail);
-
-  // Deviazione perpendicolare della coda polvere (simula la pressione solare)
-  const perpDir = new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0, 1, 0)).normalize();
-
-  const objs = [nucleus, coma, ionTail, dustTail];
-  return {
-    update(dt) {
-      age += dt;
-      if (hit) return age < 4;
-
-      nucleus.position.addScaledVector(dir, speed * dt);
-      coma.position.copy(nucleus.position);
-      nucleus.rotation.y += dt * 0.35;
-
-      // Coda ionica: scorrimento tipo lista spostata
-      const iA = ionGeo.attributes.position.array;
-      for (let i = ionN - 1; i > 0; i--) {
-        iA[i*3] = iA[(i-1)*3]; iA[i*3+1] = iA[(i-1)*3+1]; iA[i*3+2] = iA[(i-1)*3+2];
-      }
-      iA[0] = nucleus.position.x; iA[1] = nucleus.position.y; iA[2] = nucleus.position.z;
-      ionGeo.attributes.position.needsUpdate = true;
-
-      // Coda polvere: più corta, con curvatura laterale crescente
-      const dA = dustGeo.attributes.position.array;
-      for (let i = dustN - 1; i > 0; i--) {
-        dA[i*3] = dA[(i-1)*3]; dA[i*3+1] = dA[(i-1)*3+1]; dA[i*3+2] = dA[(i-1)*3+2];
-      }
-      // Ogni nuovo punto eredita posizione nucleo + deviazione accumulata
-      const curv = (dustN * 0.04);
-      dA[0] = nucleus.position.x + perpDir.x * curv;
-      dA[1] = nucleus.position.y;
-      dA[2] = nucleus.position.z + perpDir.z * curv;
-      dustGeo.attributes.position.needsUpdate = true;
-
-      // Collisione con pianeti
-      for (const mesh of planetMeshes) {
-        if (_destroyed.has(mesh)) continue;
-        const hitR = (mesh.userData.planet?.R ?? 1) + nucR;
-        if (nucleus.position.distanceTo(mesh.position) < hitR * 1.5) {
-          spawnExplosion(mesh.position.clone(), 0x66ccff, 180, 24); // esplosione azzurra
-          spawnExplosion(mesh.position.clone(), 0xffffff, 80, 18);
-          _destroyPlanet(mesh);
-          nucleus.visible = false; coma.visible = false; hit = true;
-          return true;
-        }
-      }
-      return nucleus.position.length() < pos.length() + 320;
-    },
-    dispose() { objs.forEach(o => { scene.remove(o); o.geometry.dispose(); o.material.dispose(); }); },
-  };
-}
-
-// ── Factory: Rogue Planet (interno, non più esposto nel catalogo) ─────────────
+// ── Factory: Rogue Planet (interno, non esposto nel catalogo) ─────────────────
 
 function mkRoguePlanet(pos) {
   const dir = pos.clone().negate().normalize();
@@ -513,6 +431,194 @@ function mkSupernova() {
   };
 }
 
+// ── Factory: Minaccia Aliena ──────────────────────────────────────────────────
+
+function mkAlienThreat() {
+  const UFO_R = 3.5, UFO_H = 0.7;
+  const TRAVEL_SPD = 45, HOVER_H = 14, CHARGE_DUR = 1.5, FIRE_DUR = 2.0;
+
+  const getAliveTargets = () => planetMeshes.filter(m => !_destroyed.has(m) && m.visible);
+
+  // Build 4 UFO groups
+  const ufoData = [];
+
+  for (let i = 0; i < 4; i++) {
+    const spawnAngle = (i / 4) * Math.PI * 2;
+    const startPos = new THREE.Vector3(
+      Math.cos(spawnAngle) * 190,
+      22 + i * 9,
+      Math.sin(spawnAngle) * 190
+    );
+
+    const group = new THREE.Group();
+    group.position.copy(startPos);
+
+    // Disc body
+    group.add(new THREE.Mesh(
+      new THREE.CylinderGeometry(UFO_R, UFO_R * 0.75, UFO_H, 32),
+      new THREE.MeshPhongMaterial({ color: 0x7799aa, emissive: 0x112233, shininess: 90 })
+    ));
+
+    // Dome (upper half-sphere)
+    const dome = new THREE.Mesh(
+      new THREE.SphereGeometry(UFO_R * 0.55, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+      new THREE.MeshPhongMaterial({ color: 0x88ccee, emissive: 0x113344, shininess: 120,
+        transparent: true, opacity: 0.82 })
+    );
+    dome.position.y = UFO_H * 0.5;
+    group.add(dome);
+
+    // Rim glow ring
+    const rimMat = new THREE.MeshBasicMaterial({
+      color: 0x00ffaa, transparent: true, opacity: 0.85,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(UFO_R * 0.9, 0.22, 8, 32), rimMat);
+    rim.rotation.x = Math.PI / 2;
+    group.add(rim);
+
+    // Engine glow (underside)
+    const engMat = new THREE.MeshBasicMaterial({
+      color: 0x44ffcc, transparent: true, opacity: 0.55,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const engine = new THREE.Mesh(
+      new THREE.CylinderGeometry(UFO_R * 0.5, UFO_R * 0.25, 1.2, 16), engMat
+    );
+    engine.position.y = -UFO_H * 0.5 - 0.6;
+    group.add(engine);
+
+    scene.add(group);
+
+    const targets = getAliveTargets();
+    ufoData.push({
+      group, rimMat, engMat,
+      state: 'traveling',
+      target: targets[i % Math.max(targets.length, 1)] ?? null,
+      timer: 0,
+      laser: null,
+    });
+  }
+
+  function makeLaser() {
+    const mesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.28, 0.28, 1, 8),
+      new THREE.MeshBasicMaterial({ color: 0x00ff55, transparent: true, opacity: 0.92,
+        blending: THREE.AdditiveBlending, depthWrite: false })
+    );
+    scene.add(mesh);
+    return mesh;
+  }
+
+  function removeLaser(ufo) {
+    if (!ufo.laser) return;
+    scene.remove(ufo.laser);
+    ufo.laser.geometry.dispose();
+    ufo.laser.material.dispose();
+    ufo.laser = null;
+  }
+
+  function updateLaserTransform(ufo) {
+    if (!ufo.laser || !ufo.target) return;
+    const from = ufo.group.position;
+    const to   = ufo.target.position;
+    const dir  = new THREE.Vector3().subVectors(to, from);
+    const len  = dir.length();
+    ufo.laser.scale.y = len;
+    ufo.laser.position.addVectors(from, to).multiplyScalar(0.5);
+    ufo.laser.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+  }
+
+  function nextTarget(ufo) {
+    const alive = getAliveTargets();
+    if (alive.length > 0) {
+      ufo.target = alive[Math.floor(Math.random() * alive.length)];
+      ufo.state  = 'traveling';
+    } else {
+      ufo.target = null;
+      ufo.state  = 'done';
+    }
+    ufo.timer = 0;
+  }
+
+  let age = 0;
+  return {
+    update(dt) {
+      age += dt;
+
+      ufoData.forEach(ufo => {
+        ufo.group.rotation.y += dt * 1.5;
+
+        // Pulse rim
+        ufo.rimMat.opacity = 0.55 + Math.sin(age * 6 + ufo.group.id) * 0.35;
+
+        // Handle missing or already-destroyed target
+        if (ufo.target && _destroyed.has(ufo.target)) {
+          removeLaser(ufo);
+          nextTarget(ufo);
+        }
+        if (ufo.state === 'done' || !ufo.target) { nextTarget(ufo); return; }
+
+        const tPos    = ufo.target.position;
+        const up      = tPos.clone().normalize();
+        const hoverPos = tPos.clone().addScaledVector(up, HOVER_H);
+
+        if (ufo.state === 'traveling') {
+          const toHover = new THREE.Vector3().subVectors(hoverPos, ufo.group.position);
+          const dist = toHover.length();
+          if (dist < 3) {
+            ufo.state = 'hovering'; ufo.timer = 0;
+          } else {
+            ufo.group.position.addScaledVector(toHover.normalize(), Math.min(dist, TRAVEL_SPD * dt));
+          }
+
+        } else if (ufo.state === 'hovering') {
+          ufo.group.position.lerp(hoverPos, 8 * dt);
+          ufo.timer += dt;
+          if (ufo.timer >= CHARGE_DUR) { ufo.state = 'charging'; ufo.timer = 0; }
+
+        } else if (ufo.state === 'charging') {
+          // Fast pulse — charging indicator
+          ufo.rimMat.opacity = 0.4 + Math.abs(Math.sin(age * 22)) * 0.6;
+          ufo.engMat.opacity = 0.8;
+          ufo.timer += dt;
+          if (ufo.timer >= 1.0) {
+            ufo.state = 'firing'; ufo.timer = 0;
+            ufo.laser = makeLaser();
+          }
+
+        } else if (ufo.state === 'firing') {
+          updateLaserTransform(ufo);
+          if (ufo.laser) ufo.laser.material.opacity = 0.7 + Math.sin(age * 18) * 0.28;
+          ufo.timer += dt;
+          if (ufo.timer >= FIRE_DUR) {
+            if (!_destroyed.has(ufo.target)) _destroyPlanet(ufo.target);
+            removeLaser(ufo);
+            nextTarget(ufo);
+          }
+        }
+      });
+
+      return true;
+    },
+    dispose() {
+      ufoData.forEach(ufo => {
+        removeLaser(ufo);
+        scene.remove(ufo.group);
+        ufo.group.traverse(child => {
+          if (!child.isMesh) return;
+          child.geometry?.dispose();
+          if (Array.isArray(child.material)) {
+            child.material.forEach(m => m.dispose());
+          } else {
+            child.material?.dispose();
+          }
+        });
+      });
+    },
+  };
+}
+
 // ── API pubblica ───────────────────────────────────────────────────────────────
 
 export const isGameMode    = () => _active;
@@ -523,11 +629,9 @@ export function selectCatastrophe(id) {
   const def = CATASTROPHES.find(c => c.id === id);
   if (!def) return;
 
-  // Info scientifica
   const infoEl = document.getElementById('game-info-text');
   if (infoEl) infoEl.textContent = def.info;
 
-  // Indicatore "SELEZIONATO" — nome + istruzione
   const nameEl  = document.getElementById('game-selected-name');
   const hintEl  = document.getElementById('game-selected-hint');
   const barEl   = document.getElementById('game-selected-bar');
@@ -535,7 +639,6 @@ export function selectCatastrophe(id) {
   if (hintEl) hintEl.textContent = '→ Clicca nel sistema solare per piazzarla';
   if (barEl)  barEl.style.setProperty('--sel-color', def.color);
 
-  // Aggiorna evidenziazione card
   document.querySelectorAll('.cata-card').forEach(el => {
     el.classList.toggle('selected', el.dataset.id === id);
     el.style.setProperty('--cata-color', CATASTROPHES.find(c => c.id === el.dataset.id)?.color ?? '#666');
@@ -549,18 +652,17 @@ export function activateGameMode() {
 export function deactivateGameMode() {
   _active = false;
   resetGame();
-  // Notifica ui.js di nascondere il pannello gioco senza import circolare
   document.dispatchEvent(new CustomEvent('gamemode:exit'));
 }
 
 export function placeCatastrophe(worldPos) {
-  if (!_selectedId) return; // nessuna catastrofe selezionata
+  if (!_selectedId) return;
   let cat;
   switch (_selectedId) {
-    case 'blackhole':  cat = mkBlackHole(worldPos);     break;
-    case 'meteorite':  cat = mkMeteorite(worldPos);     break;
-    case 'comet':      cat = mkComet(worldPos);         break;
-    case 'gamma':      cat = mkGammaRayBurst(worldPos); break;
+    case 'blackhole': cat = mkBlackHole(worldPos);     break;
+    case 'meteorite': cat = mkMeteorite(worldPos);     break;
+    case 'alien':     cat = mkAlienThreat();           break;
+    case 'gamma':     cat = mkGammaRayBurst(worldPos); break;
     default: return;
   }
   _cats.push(cat);
@@ -572,7 +674,8 @@ export function resetGame() {
   _explosions.forEach(e => { scene.remove(e.pts); e.pts.geometry.dispose(); e.pts.material.dispose(); });
   _explosions = [];
 
-  // Restore planets to their last orbital angle
+  restoreSun();
+
   planetMeshes.forEach(mesh => {
     mesh.visible = true;
     mesh.scale.set(1, 1, 1);
@@ -600,7 +703,7 @@ export function updateGame(dt) {
   if (!_active) return;
   _cats = _cats.filter(c => {
     const alive = c.update(dt);
-    if (!alive) { c.dispose(); }
+    if (!alive) c.dispose();
     return alive;
   });
   _updateExplosions(dt);

@@ -444,6 +444,32 @@ canvas {
   color: #c8d8f0;
 }
 
+/* Banner catastrofe selezionata */
+#game-selected-bar {
+  border: 1px solid var(--sel-color, rgba(255, 100, 100, 0.3));
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  background: rgba(255, 80, 80, 0.07);
+  transition: border-color 0.25s;
+}
+
+#game-selected-name {
+  font-family: 'Orbitron', monospace;
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffcccc;
+  letter-spacing: 1px;
+  margin-bottom: 3px;
+}
+
+#game-selected-hint {
+  font-size: 10px;
+  color: rgba(255, 200, 200, 0.55);
+  font-family: 'Exo 2', sans-serif;
+  letter-spacing: 0.5px;
+}
+
 /* Descrizione scientifica catastrofe */
 #game-info-text {
   font-size: 10.5px;

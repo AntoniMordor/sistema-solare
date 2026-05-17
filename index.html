@@ -87,10 +87,23 @@
         <span class="game-icon-title">☢</span>
         <span>MODALITÀ CATASTROFE</span>
       </div>
-      <div id="game-instruction">Seleziona e clicca per piazzare</div>
+
+      <!-- Griglia di selezione catastrofe -->
+      <div id="game-instruction">Scegli il tipo di catastrofe:</div>
       <div id="cata-grid"></div>
-      <div id="game-info-text">Seleziona una catastrofe per iniziare.</div>
+
+      <!-- Banner catastrofe selezionata — aggiornato da selectCatastrophe() -->
+      <div id="game-selected-bar">
+        <div id="game-selected-name">—</div>
+        <div id="game-selected-hint">↑ Seleziona una catastrofe</div>
+      </div>
+
+      <!-- Descrizione scientifica -->
+      <div id="game-info-text"></div>
+
+      <!-- Log eventi distruzione -->
       <div id="game-log"></div>
+
       <button id="game-reset-btn">↺ RESET SISTEMA</button>
     </div>
 

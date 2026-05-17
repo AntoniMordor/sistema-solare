@@ -6,7 +6,7 @@ import { setupTimeControl, getEffectiveJD } from './timeControl.js';
 import { getHeliocentricPosition, getSeasons } from './astronomy.js';
 import {
   CATASTROPHES, isGameMode, activateGameMode, deactivateGameMode,
-  selectCatastrophe, placeCatastrophe, resetGame, getSelectedId,
+  selectCatastrophe, placeCatastrophe, resetGame,
 } from './gameMode.js';
 
 // ── Velocità ──────────────────────────────────────────────────────────────────
@@ -111,43 +111,40 @@ function _buildGamePanel() {
     const card = document.createElement('div');
     card.className = 'cata-card';
     card.dataset.id = c.id;
-    if (c.id === getSelectedId()) card.classList.add('selected');
     card.style.setProperty('--cata-color', c.color);
     card.innerHTML = `<div class="cata-icon-big">${c.icon}</div><div class="cata-name-sm">${c.name}</div>`;
-    card.addEventListener('click', () => {
-      document.querySelectorAll('.cata-card').forEach(el => el.classList.remove('selected'));
-      card.classList.add('selected');
-      selectCatastrophe(c.id);
-    });
+    card.addEventListener('click', () => selectCatastrophe(c.id));
     grid.appendChild(card);
   });
 
-  // Seleziona la prima catastrofe per default
-  selectCatastrophe(getSelectedId());
+  // Resetta stato selezione all'apertura
+  const nameEl = document.getElementById('game-selected-name');
+  const hintEl = document.getElementById('game-selected-hint');
+  if (nameEl) nameEl.textContent = '—';
+  if (hintEl) hintEl.textContent = '↑ Seleziona una catastrofe';
+  const infoEl = document.getElementById('game-info-text');
+  if (infoEl) infoEl.textContent = '';
+}
+
+function _elDisplay(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.style.display = val;
+}
+function _elOpacity(id, val, ptr = '') {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.style.opacity = val;
+  el.style.pointerEvents = ptr;
 }
 
 function _showGameMode(on) {
-  const gamePanel = document.getElementById('game-panel');
-  const timePanel = document.getElementById('time-panel');
-  const speedBox  = document.getElementById('speed-box');
-  const orbitBtn  = document.getElementById('orbit-btn');
-
-  if (on) {
-    if (gamePanel) gamePanel.style.display = '';
-    if (timePanel) timePanel.style.display = 'none';
-    if (speedBox)  { speedBox.style.opacity = '0.25'; speedBox.style.pointerEvents = 'none'; }
-    if (orbitBtn)  orbitBtn.style.opacity = '0.4';
-    renderer.domElement.style.cursor = 'crosshair';
-    document.getElementById('btn-game')?.classList.add('active');
-    _buildGamePanel();
-  } else {
-    if (gamePanel) gamePanel.style.display = 'none';
-    if (timePanel) timePanel.style.display = '';
-    if (speedBox)  { speedBox.style.opacity = '1'; speedBox.style.pointerEvents = ''; }
-    if (orbitBtn)  orbitBtn.style.opacity = '';
-    renderer.domElement.style.cursor = '';
-    document.getElementById('btn-game')?.classList.remove('active');
-  }
+  _elDisplay('game-panel', on ? '' : 'none');
+  _elDisplay('time-panel', on ? 'none' : '');
+  _elOpacity('speed-box', on ? '0.25' : '1', on ? 'none' : '');
+  _elOpacity('orbit-btn', on ? '0.4' : '');
+  renderer.domElement.style.cursor = on ? 'crosshair' : '';
+  document.getElementById('btn-game')?.classList.toggle('active', on);
+  if (on) _buildGamePanel();
 }
 
 // Raycast sul piano eclittico (Y=0) per piazzare la catastrofe

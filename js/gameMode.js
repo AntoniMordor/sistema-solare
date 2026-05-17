@@ -11,35 +11,27 @@ import { planetMeshes, moonMeshes } from './planets.js';
 
 export const CATASTROPHES = [
   {
-    id: 'blackhole', name: 'Buco Nero', icon: '⚫', color: '#aa44ff', place: true,
-    info: 'Singolarità gravitazionale: F = GM/r². Distorce lo spaziotempo. I pianeti vengono "spaghettificati" dalle forze mareali prima di scomparire oltre l\'orizzonte degli eventi.',
+    id: 'blackhole', name: 'Buco Nero', icon: '⚫', color: '#aa44ff',
+    info: 'Singolarità gravitazionale: F = GM/r². Distorce lo spaziotempo. I pianeti vengono "spaghettificati" dalle forze mareali prima di scomparire oltre l\'orizzonte degli eventi. Clicca per posizionare la singolarità.',
   },
   {
-    id: 'gamma', name: 'Raggio Gamma', icon: '⚡', color: '#00ffbb', place: true,
-    info: 'L\'esplosione più energetica dell\'universo (10⁴⁴ J). Il fascio di radiazioni ionizzanti viaggia alla velocità della luce e vaporizza ogni pianeta nel suo percorso in millisecondi.',
+    id: 'meteorite', name: 'Meteorite', icon: '🪨', color: '#cc8844',
+    info: 'Corpo roccioso massiccio in rotta di collisione. Energia cinetica: KE = ½mv². Un impattore di 500 km libera energia pari a miliardi di bombe H, volatilizzando crosta e mantello planetario.',
   },
   {
-    id: 'asteroid', name: 'Asteroide', icon: '☄', color: '#cc8844', place: true,
-    info: 'Corpo celeste massiccio in rotta di collisione. Energia cinetica: KE = ½mv². Un impattore di 500 km libera energia equivalente a miliardi di bombe termonucleari, volatilizzando crosta e mantello.',
+    id: 'comet', name: 'Cometa', icon: '☄️', color: '#88ddff',
+    info: 'Nucleo di ghiaccio e polvere dalla Nube di Oort. Sviluppa una coda ionica (blu, punta lontano dal Sole) e una coda di polvere (gialla, incurvata). All\'impatto rilascia gas volatili ed energia cinetica.',
   },
   {
-    id: 'rogue', name: 'Pianeta Errante', icon: '🌑', color: '#4488cc', place: true,
-    info: 'Pianeta espulso da un altro sistema stellare. La sua gravità perturba le orbite causando instabilità orbitali a catena (problema degli N corpi), collisioni e risonanze caotiche.',
-  },
-  {
-    id: 'flare', name: 'Brillamento Solare', icon: '🔥', color: '#ff6600', place: false,
-    info: 'Eruzione catastrofica: miliardi di tonnellate di plasma a milioni di km/h. L\'onda di particelle cariche e campi magnetici vaporizza le atmosfere e ionizza le superfici planetarie.',
-  },
-  {
-    id: 'supernova', name: 'Supernova', icon: '💥', color: '#ffdd00', place: false,
-    info: 'Il Sole collassa e rilascia 10⁴⁴ J. L\'onda d\'urto viaggia al 10% della velocità della luce, distruggendo ogni pianeta nell\'ordine di distanza in pochi minuti solari.',
+    id: 'gamma', name: 'Raggio Gamma', icon: '⚡', color: '#00ffbb',
+    info: 'L\'evento più energetico dell\'universo (10⁴⁴ J). Il fascio di radiazioni ionizzanti viaggia alla velocità della luce. Un GRB entro 2000 anni luce distruggerebbe ogni biosfera in secondi.',
   },
 ];
 
 // ── Stato interno ─────────────────────────────────────────────────────────────
 
-let _active      = false;
-let _selectedId  = 'blackhole';
+let _active     = false;
+let _selectedId = '';   // vuoto: l'utente deve selezionare esplicitamente
 let _cats        = [];   // catastrofi attive
 let _explosions  = [];   // particelle esplosione
 let _destroyed   = new Set();
@@ -224,9 +216,9 @@ function mkGammaRayBurst(clickPos) {
   };
 }
 
-// ── Factory: Asteroid ─────────────────────────────────────────────────────────
+// ── Factory: Meteorite ───────────────────────────────────────────────────────
 
-function mkAsteroid(pos) {
+function mkMeteorite(pos) {
   const dir   = pos.clone().negate().normalize();
   const astR  = 2.5;
   const speed = 38;
@@ -286,7 +278,114 @@ function mkAsteroid(pos) {
   };
 }
 
-// ── Factory: Rogue Planet ─────────────────────────────────────────────────────
+// ── Factory: Cometa ───────────────────────────────────────────────────────────
+// Nucleo ghiacciato + coda ionica (blu, lunga) + coda di polvere (gialla, corta)
+
+function mkComet(pos) {
+  const dir   = pos.clone().negate().normalize();
+  const speed = 44;
+  const nucR  = 1.6;
+  let age = 0, hit = false;
+
+  // Nucleo — sferico, leggermente irregolare
+  const nucGeo = new THREE.SphereGeometry(nucR, 12, 12);
+  const nucPos = nucGeo.attributes.position;
+  for (let i = 0; i < nucPos.count; i++) {
+    const x = nucPos.getX(i), y = nucPos.getY(i), z = nucPos.getZ(i);
+    const n = 1 + Math.sin(x * 8 + z * 5) * 0.1;
+    nucPos.setXYZ(i, x*n, y*n, z*n);
+  }
+  nucPos.needsUpdate = true;
+  nucGeo.computeVertexNormals();
+  const nucleus = new THREE.Mesh(nucGeo,
+    new THREE.MeshPhongMaterial({ color: 0x9aaecc, emissive: 0x112233, shininess: 14 })
+  );
+  nucleus.position.copy(pos); scene.add(nucleus);
+
+  // Coma — alone azzurro intorno al nucleo
+  const coma = new THREE.Mesh(
+    new THREE.SphereGeometry(nucR * 3.5, 16, 16),
+    new THREE.MeshBasicMaterial({ color: 0x66bbff, transparent: true, opacity: 0.22,
+      blending: THREE.AdditiveBlending, depthWrite: false })
+  );
+  coma.position.copy(pos); scene.add(coma);
+
+  // Coda ionica — lunga, blu brillante, punta esattamente nella direzione di volo
+  const ionN = 160;
+  const ionArr = new Float32Array(ionN * 3);
+  for (let i = 0; i < ionN; i++) { ionArr[i*3]=pos.x; ionArr[i*3+1]=pos.y; ionArr[i*3+2]=pos.z; }
+  const ionGeo = new THREE.BufferGeometry();
+  ionGeo.setAttribute('position', new THREE.BufferAttribute(ionArr, 3));
+  const ionTail = new THREE.Points(ionGeo, new THREE.PointsMaterial({
+    color: 0x44ccff, size: 0.9, transparent: true, opacity: 0.75,
+    blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
+  }));
+  scene.add(ionTail);
+
+  // Coda di polvere — più corta, giallo-bianca, leggermente deviata
+  const dustN = 80;
+  const dustArr = new Float32Array(dustN * 3);
+  for (let i = 0; i < dustN; i++) { dustArr[i*3]=pos.x; dustArr[i*3+1]=pos.y; dustArr[i*3+2]=pos.z; }
+  const dustGeo = new THREE.BufferGeometry();
+  dustGeo.setAttribute('position', new THREE.BufferAttribute(dustArr, 3));
+  const dustTail = new THREE.Points(dustGeo, new THREE.PointsMaterial({
+    color: 0xffeeaa, size: 1.1, transparent: true, opacity: 0.55,
+    blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
+  }));
+  scene.add(dustTail);
+
+  // Deviazione perpendicolare della coda polvere (simula la pressione solare)
+  const perpDir = new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0, 1, 0)).normalize();
+
+  const objs = [nucleus, coma, ionTail, dustTail];
+  return {
+    update(dt) {
+      age += dt;
+      if (hit) return age < 4;
+
+      nucleus.position.addScaledVector(dir, speed * dt);
+      coma.position.copy(nucleus.position);
+      nucleus.rotation.y += dt * 0.35;
+
+      // Coda ionica: scorrimento tipo lista spostata
+      const iA = ionGeo.attributes.position.array;
+      for (let i = ionN - 1; i > 0; i--) {
+        iA[i*3] = iA[(i-1)*3]; iA[i*3+1] = iA[(i-1)*3+1]; iA[i*3+2] = iA[(i-1)*3+2];
+      }
+      iA[0] = nucleus.position.x; iA[1] = nucleus.position.y; iA[2] = nucleus.position.z;
+      ionGeo.attributes.position.needsUpdate = true;
+
+      // Coda polvere: più corta, con curvatura laterale crescente
+      const dA = dustGeo.attributes.position.array;
+      for (let i = dustN - 1; i > 0; i--) {
+        dA[i*3] = dA[(i-1)*3]; dA[i*3+1] = dA[(i-1)*3+1]; dA[i*3+2] = dA[(i-1)*3+2];
+      }
+      // Ogni nuovo punto eredita posizione nucleo + deviazione accumulata
+      const curv = (dustN * 0.04);
+      dA[0] = nucleus.position.x + perpDir.x * curv;
+      dA[1] = nucleus.position.y;
+      dA[2] = nucleus.position.z + perpDir.z * curv;
+      dustGeo.attributes.position.needsUpdate = true;
+
+      // Collisione con pianeti
+      for (const mesh of planetMeshes) {
+        if (_destroyed.has(mesh)) continue;
+        const hitR = (mesh.userData.planet?.R ?? 1) + nucR;
+        if (nucleus.position.distanceTo(mesh.position) < hitR * 1.5) {
+          spawnExplosion(mesh.position.clone(), 0x66ccff, 180, 24); // esplosione azzurra
+          spawnExplosion(mesh.position.clone(), 0xffffff, 80, 18);
+          _destroyPlanet(mesh);
+          nucleus.visible = false; coma.visible = false; hit = true;
+          return true;
+        }
+      }
+      return nucleus.position.length() < pos.length() + 320;
+    },
+    dispose() { objs.forEach(o => { scene.remove(o); o.geometry.dispose(); o.material.dispose(); }); },
+  };
+}
+
+// ── Factory: Rogue Planet (interno, non più esposto nel catalogo) ─────────────
 
 function mkRoguePlanet(pos) {
   const dir = pos.clone().negate().normalize();
@@ -422,8 +521,25 @@ export const getSelectedId = () => _selectedId;
 export function selectCatastrophe(id) {
   _selectedId = id;
   const def = CATASTROPHES.find(c => c.id === id);
+  if (!def) return;
+
+  // Info scientifica
   const infoEl = document.getElementById('game-info-text');
-  if (infoEl && def) infoEl.textContent = def.info;
+  if (infoEl) infoEl.textContent = def.info;
+
+  // Indicatore "SELEZIONATO" — nome + istruzione
+  const nameEl  = document.getElementById('game-selected-name');
+  const hintEl  = document.getElementById('game-selected-hint');
+  const barEl   = document.getElementById('game-selected-bar');
+  if (nameEl) nameEl.textContent = `${def.icon}  ${def.name.toUpperCase()}`;
+  if (hintEl) hintEl.textContent = '→ Clicca nel sistema solare per piazzarla';
+  if (barEl)  barEl.style.setProperty('--sel-color', def.color);
+
+  // Aggiorna evidenziazione card
+  document.querySelectorAll('.cata-card').forEach(el => {
+    el.classList.toggle('selected', el.dataset.id === id);
+    el.style.setProperty('--cata-color', CATASTROPHES.find(c => c.id === el.dataset.id)?.color ?? '#666');
+  });
 }
 
 export function activateGameMode() {
@@ -438,14 +554,13 @@ export function deactivateGameMode() {
 }
 
 export function placeCatastrophe(worldPos) {
+  if (!_selectedId) return; // nessuna catastrofe selezionata
   let cat;
   switch (_selectedId) {
-    case 'blackhole': cat = mkBlackHole(worldPos);     break;
-    case 'gamma':     cat = mkGammaRayBurst(worldPos); break;
-    case 'asteroid':  cat = mkAsteroid(worldPos);      break;
-    case 'rogue':     cat = mkRoguePlanet(worldPos);   break;
-    case 'flare':     cat = mkSolarFlare();            break;
-    case 'supernova': cat = mkSupernova();             break;
+    case 'blackhole':  cat = mkBlackHole(worldPos);     break;
+    case 'meteorite':  cat = mkMeteorite(worldPos);     break;
+    case 'comet':      cat = mkComet(worldPos);         break;
+    case 'gamma':      cat = mkGammaRayBurst(worldPos); break;
     default: return;
   }
   _cats.push(cat);

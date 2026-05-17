@@ -4,6 +4,10 @@ import { planetMeshes, orbitLines, moonMeshes, moonOrbitLines } from './planets.
 import { focusPlanet, exitFollow, isFollowing } from './cameraControl.js';
 import { setupTimeControl, getEffectiveJD } from './timeControl.js';
 import { getHeliocentricPosition, getSeasons } from './astronomy.js';
+import {
+  CATASTROPHES, isGameMode, activateGameMode, deactivateGameMode,
+  selectCatastrophe, placeCatastrophe, resetGame, getSelectedId,
+} from './gameMode.js';
 
 // ── Velocità ──────────────────────────────────────────────────────────────────
 
@@ -57,8 +61,8 @@ function _updateSeason(textureKey, angle) {
   if (!elRow || !elSeason) return;
   const season = _computeSeason(textureKey, angle ?? 0);
   if (season) {
-    elSeason.textContent  = `${season.north} (N) · ${season.south} (S)`;
-    elRow.style.display   = '';
+    elSeason.textContent = `${season.north} (N) · ${season.south} (S)`;
+    elRow.style.display  = '';
   } else {
     elRow.style.display = 'none';
   }
@@ -68,12 +72,9 @@ function _drawIcon(mesh, isMoon) {
   const icon = document.getElementById('p-icon');
   const ctx  = icon.getContext('2d');
   ctx.clearRect(0, 0, 64, 64);
-
-  // Terra usa ShaderMaterial → day texture nelle uniforms
   const img = mesh.material.uniforms?.uDay
     ? mesh.material.uniforms.uDay.value?.image
     : mesh.material.map?.image;
-
   ctx.save();
   ctx.beginPath();
   ctx.arc(32, 32, 30, 0, Math.PI * 2);
@@ -81,7 +82,7 @@ function _drawIcon(mesh, isMoon) {
     ctx.clip();
     ctx.drawImage(img, 0, 0, 64, 64);
   } else {
-    const data   = isMoon ? mesh.userData.moon : mesh.userData.planet;
+    const data    = isMoon ? mesh.userData.moon : mesh.userData.planet;
     ctx.fillStyle = data.emi ? `#${data.emi.toString(16).padStart(6, '0')}` : '#334455';
     ctx.fill();
   }
@@ -99,63 +100,86 @@ function showInfo(mesh) {
   document.getElementById('info-panel').classList.add('open');
 }
 
-// ── Setup ─────────────────────────────────────────────────────────────────────
+// ── Modalità Gioco ────────────────────────────────────────────────────────────
 
-export function setupUI() {
-  setupTimeControl();
+function _buildGamePanel() {
+  const grid = document.getElementById('cata-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
 
-  const panel = document.getElementById('info-panel');
-
-  // Chiudi pannello e rilascia follow
-  document.getElementById('panel-x').addEventListener('click', () => {
-    panel.classList.remove('open');
-    if (isFollowing()) exitFollow();
+  CATASTROPHES.forEach(c => {
+    const card = document.createElement('div');
+    card.className = 'cata-card';
+    card.dataset.id = c.id;
+    if (c.id === getSelectedId()) card.classList.add('selected');
+    card.style.setProperty('--cata-color', c.color);
+    card.innerHTML = `<div class="cata-icon-big">${c.icon}</div><div class="cata-name-sm">${c.name}</div>`;
+    card.addEventListener('click', () => {
+      document.querySelectorAll('.cata-card').forEach(el => el.classList.remove('selected'));
+      card.classList.add('selected');
+      selectCatastrophe(c.id);
+    });
+    grid.appendChild(card);
   });
 
-  // Bottone "torna alla mappa"
-  document.getElementById('exit-follow').addEventListener('click', () => {
-    panel.classList.remove('open');
-    exitFollow();
-  });
+  // Seleziona la prima catastrofe per default
+  selectCatastrophe(getSelectedId());
+}
 
-  // Escape
-  globalThis.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && isFollowing()) {
-      panel.classList.remove('open');
-      exitFollow();
-    }
-  });
+function _showGameMode(on) {
+  const gamePanel = document.getElementById('game-panel');
+  const timePanel = document.getElementById('time-panel');
+  const speedBox  = document.getElementById('speed-box');
+  const orbitBtn  = document.getElementById('orbit-btn');
 
-  // Velocità
-  const slider     = document.getElementById('speed-slider');
-  const speedLabel = document.getElementById('speed-val');
-  slider.addEventListener('input', () => {
-    speedMultiplier = Number.parseFloat(slider.value);
-    speedLabel.textContent = speedMultiplier.toFixed(1) + '×';
-  });
+  if (on) {
+    if (gamePanel) gamePanel.style.display = '';
+    if (timePanel) timePanel.style.display = 'none';
+    if (speedBox)  { speedBox.style.opacity = '0.25'; speedBox.style.pointerEvents = 'none'; }
+    if (orbitBtn)  orbitBtn.style.opacity = '0.4';
+    renderer.domElement.style.cursor = 'crosshair';
+    document.getElementById('btn-game')?.classList.add('active');
+    _buildGamePanel();
+  } else {
+    if (gamePanel) gamePanel.style.display = 'none';
+    if (timePanel) timePanel.style.display = '';
+    if (speedBox)  { speedBox.style.opacity = '1'; speedBox.style.pointerEvents = ''; }
+    if (orbitBtn)  orbitBtn.style.opacity = '';
+    renderer.domElement.style.cursor = '';
+    document.getElementById('btn-game')?.classList.remove('active');
+  }
+}
 
-  // Toggle orbite (pianeti + lune)
-  let orbitsOn = true;
-  const orbitBtn = document.getElementById('orbit-btn');
-  orbitBtn.addEventListener('click', () => {
-    orbitsOn = !orbitsOn;
-    [...orbitLines, ...moonOrbitLines].forEach((l) => (l.visible = orbitsOn));
-    orbitBtn.classList.toggle('on', orbitsOn);
-  });
+// Raycast sul piano eclittico (Y=0) per piazzare la catastrofe
+function _placeFromClick(e) {
+  const mx = (e.clientX / window.innerWidth)  * 2 - 1;
+  const my = -(e.clientY / window.innerHeight) * 2 + 1;
+  const ray = new THREE.Raycaster();
+  ray.setFromCamera(new THREE.Vector2(mx, my), camera);
+  const eclipticPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  const target = new THREE.Vector3();
+  if (ray.ray.intersectPlane(eclipticPlane, target)) {
+    placeCatastrophe(target);
+  }
+}
 
-  // Raycasting su pianeti E lune
-  const ray     = new THREE.Raycaster();
-  const mouse   = new THREE.Vector2();
-  const tooltip = document.getElementById('tooltip');
-  let hovered   = null;
+// ── Setup — handler estratti per ridurre cognitive complexity ─────────────────
 
-  const allBodies = () => [...planetMeshes, ...moonMeshes];
+function _makeKeyHandler(panel) {
+  return (e) => {
+    if (e.key !== 'Escape') return;
+    if (isGameMode()) { deactivateGameMode(); _showGameMode(false); return; }
+    if (isFollowing()) { panel.classList.remove('open'); exitFollow(); }
+  };
+}
 
-  renderer.domElement.addEventListener('mousemove', (e) => {
-    mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+function _makeMoveHandler(ray, mouse, tooltip, allBodies) {
+  let hovered = null;
+  return (e) => {
+    if (isGameMode()) { tooltip.classList.remove('show'); return; }
+    mouse.x = (e.clientX / window.innerWidth)  * 2 - 1;
     mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
     ray.setFromCamera(mouse, camera);
-
     const hits = ray.intersectObjects(allBodies(), false);
     if (hits.length > 0) {
       const m = hits[0].object;
@@ -174,20 +198,76 @@ export function setupUI() {
       if (hovered) { hovered = null; renderer.domElement.style.cursor = ''; }
       tooltip.classList.remove('show');
     }
-  });
+  };
+}
 
-  renderer.domElement.addEventListener('click', (e) => {
-    mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+function _makeClickHandler(ray, mouse, panel, allBodies) {
+  return (e) => {
+    if (isGameMode()) { _placeFromClick(e); return; }
+    mouse.x = (e.clientX / window.innerWidth)  * 2 - 1;
     mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
     ray.setFromCamera(mouse, camera);
-
     const hits = ray.intersectObjects(allBodies(), false);
     if (hits.length > 0) {
-      const mesh = hits[0].object;
-      showInfo(mesh);
-      focusPlanet(mesh);
+      showInfo(hits[0].object);
+      focusPlanet(hits[0].object);
     } else if (!isFollowing()) {
       panel.classList.remove('open');
     }
+  };
+}
+
+// ── Setup ─────────────────────────────────────────────────────────────────────
+
+export function setupUI() {
+  setupTimeControl();
+
+  const panel = document.getElementById('info-panel');
+  const ray   = new THREE.Raycaster();
+  const mouse = new THREE.Vector2();
+  const allBodies = () => [...planetMeshes, ...moonMeshes];
+
+  document.getElementById('panel-x').addEventListener('click', () => {
+    panel.classList.remove('open');
+    if (isFollowing()) exitFollow();
   });
+  document.getElementById('exit-follow').addEventListener('click', () => {
+    panel.classList.remove('open');
+    exitFollow();
+  });
+  globalThis.addEventListener('keydown', _makeKeyHandler(panel));
+
+  const slider = document.getElementById('speed-slider');
+  const speedLabel = document.getElementById('speed-val');
+  slider.addEventListener('input', () => {
+    speedMultiplier = Number.parseFloat(slider.value);
+    speedLabel.textContent = speedMultiplier.toFixed(1) + '×';
+  });
+
+  let orbitsOn = true;
+  const orbitBtn = document.getElementById('orbit-btn');
+  orbitBtn.addEventListener('click', () => {
+    orbitsOn = !orbitsOn;
+    [...orbitLines, ...moonOrbitLines].forEach(l => (l.visible = orbitsOn));
+    orbitBtn.classList.toggle('on', orbitsOn);
+  });
+
+  document.getElementById('btn-game')?.addEventListener('click', () => {
+    if (isGameMode()) return;
+    activateGameMode();
+    _showGameMode(true);
+    panel.classList.remove('open');
+  });
+
+  // Nasconde il pannello gioco quando si esce dalla modalità (custom event da gameMode.js)
+  document.addEventListener('gamemode:exit', () => _showGameMode(false));
+  document.getElementById('game-reset-btn')?.addEventListener('click', () => {
+    resetGame();
+    const logEl = document.getElementById('game-log');
+    if (logEl) logEl.innerHTML = '';
+  });
+
+  const tooltip = document.getElementById('tooltip');
+  renderer.domElement.addEventListener('mousemove', _makeMoveHandler(ray, mouse, tooltip, allBodies));
+  renderer.domElement.addEventListener('click',     _makeClickHandler(ray, mouse, panel, allBodies));
 }

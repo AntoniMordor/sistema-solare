@@ -48,6 +48,7 @@
       <div id="mode-toggle">
         <button id="btn-realtime" class="mode-btn active">● REALE</button>
         <button id="btn-sim" class="mode-btn">SIMULAZIONE</button>
+        <button id="btn-game" class="mode-btn">☢ GIOCO</button>
       </div>
 
       <!-- Orologio (visibile solo in modalità REALE) -->
@@ -78,6 +79,19 @@
         />
         <select id="tz-select" size="4" aria-label="Seleziona fuso orario"></select>
       </div>
+    </div>
+
+    <!-- ═══ Pannello Modalità Gioco ═══ -->
+    <div id="game-panel">
+      <div id="game-header">
+        <span class="game-icon-title">☢</span>
+        <span>MODALITÀ CATASTROFE</span>
+      </div>
+      <div id="game-instruction">Seleziona e clicca per piazzare</div>
+      <div id="cata-grid"></div>
+      <div id="game-info-text">Seleziona una catastrofe per iniziare.</div>
+      <div id="game-log"></div>
+      <button id="game-reset-btn">↺ RESET SISTEMA</button>
     </div>
 
     <!-- Pannello info pianeta / luna -->

@@ -4,6 +4,8 @@
  * e la visualizzazione dell'orologio astronomico.
  */
 
+import { isGameMode, deactivateGameMode } from './gameMode.js';
+
 // ── Stato interno ─────────────────────────────────────────────────────────────
 
 let _realTimeMode = true;
@@ -174,8 +176,15 @@ export function setupTimeControl() {
   elSelect.addEventListener('change', () => { _selectedTZ = elSelect.value; _tick(); });
   elSearch.addEventListener('input',  () => _buildSelect(elSearch.value));
 
-  document.getElementById('btn-realtime')?.addEventListener('click', () => _applyMode(true));
-  document.getElementById('btn-sim')?.addEventListener('click',      () => _applyMode(false));
+  // I pulsanti REALE/SIM escono dalla modalità GIOCO se attiva
+  document.getElementById('btn-realtime')?.addEventListener('click', () => {
+    if (isGameMode()) deactivateGameMode();
+    _applyMode(true);
+  });
+  document.getElementById('btn-sim')?.addEventListener('click', () => {
+    if (isGameMode()) deactivateGameMode();
+    _applyMode(false);
+  });
 
   _applyMode(true);
 }

@@ -138,11 +138,13 @@ function _elOpacity(id, val, ptr = '') {
 }
 
 function _showGameMode(on) {
-  _elDisplay('game-panel', on ? '' : 'none');
-  _elDisplay('time-panel', on ? 'none' : '');
+  // game-panel e time-panel sono mutuamente esclusivi (stessa posizione)
+  _elDisplay('game-panel', on ? 'block' : 'none');
+  _elDisplay('time-panel', on ? 'none' : 'block');
   _elOpacity('speed-box', on ? '0.25' : '1', on ? 'none' : '');
   _elOpacity('orbit-btn', on ? '0.4' : '');
   renderer.domElement.style.cursor = on ? 'crosshair' : '';
+  // btn-game è ora FUORI da time-panel, sempre visibile
   document.getElementById('btn-game')?.classList.toggle('active', on);
   if (on) _buildGamePanel();
 }
